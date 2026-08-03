@@ -26,24 +26,40 @@ export interface AppOptions {
   readonly logger?: Logger;
 }
 
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+const IPV6_CHARS = /^[0-9A-Fa-f:.]+$/;
+
+/** Loose but sufficient: rejects anything Postgres' inet type would choke on. */
+export function isIpLike(value: string): boolean {
+  const v4 = IPV4.exec(value);
+  if (v4 !== null) return v4.slice(1).every((octet) => Number(octet) <= 255);
+  return value.includes(":") && IPV6_CHARS.test(value);
+}
+
 /**
- * The app binds to localhost and sits behind nginx (§13), so the proxy is the
- * only thing that can reach it and its X-Forwarded-For is the client address.
- * The leftmost entry is the original client.
+ * The app binds to localhost and sits behind nginx (§13). With the standard
+ * `proxy_add_x_forwarded_for`, nginx *appends* the address it actually talked
+ * to, so the rightmost entry is the only one the proxy vouches for — everything
+ * left of it arrived in the client's own header and is attacker-chosen. Taking
+ * the leftmost would let a scanner rotate fake IPs past the login rate limiter.
+ * The value also feeds `::inet` casts, so anything that does not look like an
+ * IP is discarded rather than allowed to become a 500 at the database.
  */
-function clientIpOf(
+export function clientIpOf(
   c: { req: { header(name: string): string | undefined; raw: Request } },
 ): string {
   const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded !== undefined && forwarded.trim() !== "") {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first !== undefined && first !== "") return first;
+  if (forwarded !== undefined) {
+    const last = forwarded.split(",").at(-1)?.trim();
+    if (last !== undefined && isIpLike(last)) return last;
   }
   try {
-    return getConnInfo(c as never).remote.address ?? "0.0.0.0";
+    const address = getConnInfo(c as never).remote.address;
+    if (address !== undefined && isIpLike(address)) return address;
   } catch {
-    return "0.0.0.0";
+    // Fall through: no connection info outside a real Deno.serve handler.
   }
+  return "0.0.0.0";
 }
 
 export function createApp(options: AppOptions): Hono<AppEnv> {

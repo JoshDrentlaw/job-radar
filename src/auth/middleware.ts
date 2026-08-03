@@ -73,9 +73,9 @@ export function sessionMiddleware(deps: AuthMiddlewareDeps): MiddlewareHandler<A
     }
 
     if (user === null && !isPublicPath(c.req.path)) {
-      const target = c.req.path + (c.req.url.includes("?") ? `?${new URL(c.req.url).search}` : "");
-      const next = encodeURIComponent(target.startsWith("/") ? target : "/");
-      return c.redirect(`/login?next=${next}`, 302);
+      // URL.search is "" or already includes its leading "?".
+      const target = c.req.path + new URL(c.req.url).search;
+      return c.redirect(`/login?next=${encodeURIComponent(target)}`, 302);
     }
 
     await next();
