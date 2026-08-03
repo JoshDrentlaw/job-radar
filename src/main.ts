@@ -23,6 +23,9 @@ import { PostgresMatchRepo } from "@adapters/db/match-repo.ts";
 import { PostgresSettingsRepo } from "@adapters/db/settings-repo.ts";
 import { PostgresFactRepo } from "@adapters/db/fact-repo.ts";
 import { PostgresVariantRepo } from "@adapters/db/variant-repo.ts";
+import { PostgresTailoringRepo } from "@adapters/db/tailoring-repo.ts";
+import { PostgresDocumentRepo } from "@adapters/db/document-repo.ts";
+import { AnthropicLlmClient } from "@adapters/llm/anthropic.ts";
 import { VoyageEmbedder } from "@adapters/embedding/voyage.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
 import { GreenhouseSource } from "@adapters/ats/greenhouse.ts";
@@ -68,6 +71,15 @@ if (embedder === null) {
   logger.warn("VOYAGE_API_KEY is not set — embedding and matching are disabled");
 }
 
+// Tailoring is likewise optional: the fact set and variants work by hand
+// without it, which is exactly how M4 proved the data model.
+const llm = config.anthropicApiKey !== undefined
+  ? new AnthropicLlmClient({ apiKey: config.anthropicApiKey, model: config.anthropicModel })
+  : null;
+if (llm === null) {
+  logger.warn("ANTHROPIC_API_KEY is not set — tailoring and cover letters are disabled");
+}
+
 const services: Services = {
   boards: new PostgresBoardRepo(sql),
   postings: new PostgresPostingRepo(sql),
@@ -84,6 +96,9 @@ const services: Services = {
   embedder,
   facts: new PostgresFactRepo(sql),
   variants: new PostgresVariantRepo(sql),
+  tailoring: new PostgresTailoringRepo(sql),
+  documents: new PostgresDocumentRepo(sql),
+  llm,
   clock: systemClock,
   logger,
 };

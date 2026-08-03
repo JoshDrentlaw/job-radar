@@ -17,9 +17,25 @@ export const FACT_KINDS = [
   "skill",
   "education",
   "project",
+  /**
+   * Long-form source material for cover letters (M5). A narrative fact is as
+   * true and as traceable as any other — it is simply not resume-shaped, so it
+   * never renders on a resume. Resolves the brief's open question 4.
+   */
+  "narrative",
 ] as const;
 
 export type FactKind = (typeof FACT_KINDS)[number];
+
+/** Kinds the resume renders. `narrative` is deliberately absent. */
+export const RESUME_KINDS: ReadonlySet<FactKind> = new Set([
+  "summary",
+  "role",
+  "bullet",
+  "skill",
+  "education",
+  "project",
+]);
 
 export function isFactKind(value: string): value is FactKind {
   return (FACT_KINDS as readonly string[]).includes(value);

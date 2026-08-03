@@ -27,6 +27,10 @@ export interface Config {
    * re-embeds the corpus and rescores everything — never change it casually.
    */
   readonly embeddingModel: string;
+  /** Absent when tailoring is not configured; the dossier pages say so. */
+  readonly anthropicApiKey?: string;
+  /** Recorded on every tailoring run, so a proposal's provenance is inspectable. */
+  readonly anthropicModel: string;
   readonly logLevel: LogLevel;
   /**
    * Whether to set `Secure` on the session cookie. Always true in production;
@@ -106,6 +110,7 @@ export function loadConfig(source: EnvSource = denoEnv): Config {
   );
 
   const voyageApiKey = source("VOYAGE_API_KEY")?.trim() ?? "";
+  const anthropicApiKey = source("ANTHROPIC_API_KEY")?.trim() ?? "";
 
   return {
     env: rawEnv,
@@ -116,6 +121,8 @@ export function loadConfig(source: EnvSource = denoEnv): Config {
     databaseUrl,
     ...(voyageApiKey !== "" ? { voyageApiKey } : {}),
     embeddingModel: optional(source, "EMBEDDING_MODEL", "voyage-3.5"),
+    ...(anthropicApiKey !== "" ? { anthropicApiKey } : {}),
+    anthropicModel: optional(source, "ANTHROPIC_MODEL", "claude-opus-5"),
     logLevel: rawLogLevel as LogLevel,
     secureCookies: rawEnv === "production",
   };

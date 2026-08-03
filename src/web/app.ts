@@ -22,6 +22,8 @@ import { matchRoutes } from "./routes/matches.tsx";
 import { tuningRoutes } from "./routes/tuning.tsx";
 import { dossierRoutes } from "./routes/dossier.tsx";
 import { variantRoutes } from "./routes/variants.tsx";
+import { tailoringRoutes } from "./routes/tailoring.tsx";
+import { letterRoutes } from "./routes/letters.tsx";
 import { coverageRoutes } from "./routes/coverage.tsx";
 import { staticRoutes } from "./routes/static.ts";
 
@@ -112,6 +114,8 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.route("/", tuningRoutes);
   app.route("/", dossierRoutes);
   app.route("/", variantRoutes);
+  app.route("/", tailoringRoutes);
+  app.route("/", letterRoutes);
   app.route("/", coverageRoutes);
 
   app.notFound((c) => c.text("Not found.", 404));

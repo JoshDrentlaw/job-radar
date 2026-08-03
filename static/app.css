@@ -971,3 +971,39 @@ input[type="number"] {
 .warn-text {
   color: var(--warn);
 }
+
+/* ------------------------------------------------------ M5: tailoring ----- */
+
+/* A proposed rewrite awaiting review. The flagged treatment is deliberately
+   loud: these are where invented specifics show up. */
+.proposal {
+  padding-block: var(--space-m);
+
+  & + .proposal {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+.proposal-flagged {
+  border-inline-start: 3px solid var(--warn);
+  padding-inline-start: var(--space-m);
+  margin-inline-start: calc(-1 * var(--space-m));
+}
+
+/* Facts a cover-letter paragraph claims to rest on. */
+.citation-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2xs) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+
+  & li {
+    font-size: var(--step--1);
+    line-height: 1.5;
+    color: var(--ink-muted);
+    padding-inline-start: var(--space-s);
+    border-inline-start: 2px solid var(--rule);
+  }
+}

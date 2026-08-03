@@ -24,6 +24,8 @@ import type {
 } from "@domain/discovery/matching.ts";
 import type { CollectionRunRepo } from "@domain/discovery/coverage.ts";
 import type { FactRepo, VariantRepo } from "@domain/dossier/types.ts";
+import type { DocumentRepo, TailoringRepo } from "@domain/dossier/proposals.ts";
+import type { LlmClient } from "@domain/llm.ts";
 import type { SessionService } from "@auth/session.ts";
 import type { LoginRateLimiter } from "@auth/rate-limit.ts";
 import type { UserRepo } from "@auth/types.ts";
@@ -45,6 +47,10 @@ export interface Services {
   readonly embedder: Embedder | null;
   readonly facts: FactRepo;
   readonly variants: VariantRepo;
+  readonly tailoring: TailoringRepo;
+  readonly documents: DocumentRepo;
+  /** Null when no Anthropic API key is configured; the dossier pages say so. */
+  readonly llm: LlmClient | null;
   readonly clock: Clock;
   readonly logger: Logger;
 }

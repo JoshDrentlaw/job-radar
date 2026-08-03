@@ -11,7 +11,7 @@
 import { type Context, Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, Notice, relativeAge } from "@web/components.tsx";
+import { CsrfField, formatDateTime, Notice, relativeAge } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asFactId, asPostingId, asVariantId, type FactId, type VariantId } from "@platform/ids.ts";
 import {
@@ -129,6 +129,9 @@ const VariantsPage: FC<{
 const WARNING_TEXT: Record<AssemblyWarning["reason"], string> = {
   "bullet-without-parent": "a selected bullet has no parent fact and will not render",
   "parent-not-selected": "a selected bullet's role/project is not selected, so it will not render",
+  "narrative-not-in-resume":
+    "a narrative fact is selected; narrative facts are cover-letter source material and never " +
+    "render on a resume",
 };
 
 const VariantEditorPage: FC<{
@@ -136,6 +139,10 @@ const VariantEditorPage: FC<{
   facts: readonly ResumeFact[];
   warnings: readonly AssemblyWarning[];
   identityMissing: boolean;
+  llmConfigured: boolean;
+  targetTitle?: string;
+  latestRunId?: string;
+  letters: readonly { id: string; status: string; createdAt: Date }[];
   csrfToken: string;
   error?: string;
   notice?: string;
@@ -169,6 +176,78 @@ const VariantEditorPage: FC<{
           <a class="button primary" href={act("/resume.docx")}>DOCX</a>
         </div>
       </div>
+
+      {!variant.frozen && (
+        <section class="panel stack">
+          <header>
+            <h2>Tailoring</h2>
+          </header>
+          <p class="panel-note">
+            Proposes rewordings of facts you already have, against this variant's target posting.
+            The model cannot add facts: a response citing a fact that does not exist is rejected
+            whole, and nothing reaches this variant until you accept it side-by-side with the
+            original.
+          </p>
+          {props.targetTitle === undefined
+            ? (
+              <Notice kind="warn">
+                This variant has no target posting, so there is nothing to tailor toward. Set one
+                below.
+              </Notice>
+            )
+            : <p class="field-hint">Targeting {props.targetTitle}.</p>}
+          {!props.llmConfigured && (
+            <Notice kind="warn">
+              No Anthropic API key is configured (ANTHROPIC_API_KEY), so tailoring and cover letters
+              are unavailable. Everything else on this page works by hand.
+            </Notice>
+          )}
+          <div class="row">
+            <form method="post" action={act("/tailor")} class="inline-form">
+              <CsrfField token={props.csrfToken} />
+              <button
+                type="submit"
+                class="primary"
+                disabled={!props.llmConfigured || props.targetTitle === undefined}
+              >
+                Propose rewrites
+              </button>
+            </form>
+            <form method="post" action={act("/cover-letter")} class="inline-form">
+              <CsrfField token={props.csrfToken} />
+              <button
+                type="submit"
+                class="quiet"
+                disabled={!props.llmConfigured || props.targetTitle === undefined}
+              >
+                Draft a cover letter
+              </button>
+            </form>
+            {props.latestRunId !== undefined && (
+              <a class="button quiet" href={`/dossier/runs/${props.latestRunId}`}>
+                Latest proposals
+              </a>
+            )}
+          </div>
+          {props.letters.length > 0 && (
+            <div class="gap-above">
+              <p class="field-hint">Cover letter drafts:</p>
+              <ul class="citation-list">
+                {props.letters.map((letter) => (
+                  <li key={letter.id}>
+                    <a href={`/dossier/letters/${letter.id}`}>
+                      {formatDateTime(letter.createdAt)}
+                    </a>{" "}
+                    <span class={`chip ${letter.status === "accepted" ? "ok" : "warn"}`}>
+                      {letter.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       {props.error !== undefined && <Notice kind="error">{props.error}</Notice>}
       {props.notice !== undefined && <Notice kind="ok">{props.notice}</Notice>}
@@ -417,15 +496,29 @@ variantRoutes.get("/dossier/variants/:id", async (c) => {
   const variant = await loadVariant(c);
   if (variant === null) return c.notFound();
   const services = c.get("services");
-  const [facts, identity] = await Promise.all([
+  const [facts, identity, latestRun, letters] = await Promise.all([
     services.facts.list(),
     services.settings.get<Identity>(IDENTITY_SETTING),
+    services.tailoring.latestRunFor(variant.id),
+    services.documents.listForVariant(variant.id),
   ]);
   const { warnings } = assembleResume(
     identity ?? { name: "", links: [] },
     facts,
     variant,
   );
+
+  // The target's title, when it is still stored — the tailoring panel says
+  // what it would aim at rather than just showing an opaque id.
+  let targetTitle: string | undefined;
+  if (variant.targetPostingId !== undefined) {
+    const posting = await services.postings.get(variant.targetPostingId);
+    if (posting !== null) {
+      const board = await services.boards.get(posting.boardId);
+      targetTitle = `${posting.title} at ${board?.companyName ?? posting.boardId}`;
+    }
+  }
+
   const error = c.req.query("error");
   const notice = c.req.query("notice");
   return c.html(
@@ -434,6 +527,14 @@ variantRoutes.get("/dossier/variants/:id", async (c) => {
       facts={facts}
       warnings={warnings}
       identityMissing={identity === null}
+      llmConfigured={services.llm !== null}
+      letters={letters.map((d) => ({
+        id: d.id,
+        status: d.status,
+        createdAt: d.createdAt,
+      }))}
+      {...(targetTitle !== undefined ? { targetTitle } : {})}
+      {...(latestRun !== null ? { latestRunId: latestRun.id } : {})}
       csrfToken={c.get("csrfToken")}
       {...(error !== undefined ? { error } : {})}
       {...(notice !== undefined ? { notice } : {})}

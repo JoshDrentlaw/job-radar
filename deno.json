@@ -4,12 +4,12 @@
   "exports": "./src/main.ts",
 
   "tasks": {
-    "dev": "deno run --watch --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443,api.lever.co:443,api.ashbyhq.com:443,api.voyageai.com:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG*,VOYAGE_API_KEY,EMBEDDING_MODEL --allow-read=./migrations,./static src/main.ts",
-    "start": "deno run --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443,api.lever.co:443,api.ashbyhq.com:443,api.voyageai.com:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG*,VOYAGE_API_KEY,EMBEDDING_MODEL --allow-read=./migrations,./static src/main.ts",
+    "dev": "deno run --watch --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443,api.lever.co:443,api.ashbyhq.com:443,api.voyageai.com:443,api.anthropic.com:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG*,VOYAGE_API_KEY,EMBEDDING_MODEL,ANTHROPIC_API_KEY,ANTHROPIC_MODEL,ANTHROPIC_LOG --allow-read=./migrations,./static src/main.ts",
+    "start": "deno run --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443,api.lever.co:443,api.ashbyhq.com:443,api.voyageai.com:443,api.anthropic.com:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG*,VOYAGE_API_KEY,EMBEDDING_MODEL,ANTHROPIC_API_KEY,ANTHROPIC_MODEL,ANTHROPIC_LOG --allow-read=./migrations,./static src/main.ts",
     "migrate": "deno run --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG* --allow-read=./migrations src/platform/migrate-cli.ts",
     "seed-admin": "deno run --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG*,ADMIN_USERNAME,ADMIN_PASSWORD src/tasks/seed-admin.ts",
-    "test": "deno test --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,TEST_DATABASE_URL,APP_ENV,LOG_LEVEL,PG* --allow-read=./migrations,./test,./static",
-    "test:unit": "deno test --allow-read=./test test/unit",
+    "test": "deno test --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,TEST_DATABASE_URL,APP_ENV,LOG_LEVEL,PG*,ANTHROPIC_* --allow-read=./migrations,./test,./static",
+    "test:unit": "deno test --allow-env=ANTHROPIC_* --allow-read=./test test/unit",
     "check": "deno check src/ test/ && deno lint && deno fmt --check"
   },
 
@@ -24,6 +24,7 @@
     "hono/jsx/jsx-dev-runtime": "jsr:@hono/hono@4.12.33/jsx/jsx-dev-runtime",
     "postgres": "npm:postgres@3.4.9",
     "hash-wasm": "npm:hash-wasm@4.12.0",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.115.0",
     "@b-fuze/deno-dom": "jsr:@b-fuze/deno-dom@0.1.56",
     "@std/assert": "jsr:@std/assert@1.0.19",
     "@std/path": "jsr:@std/path@1.1.6",

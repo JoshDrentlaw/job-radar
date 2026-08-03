@@ -56,6 +56,7 @@ const KIND_LABELS: Record<FactKind, string> = {
   skill: "Skills",
   education: "Education",
   project: "Projects",
+  narrative: "Narrative (cover letters only)",
 };
 
 const FactForm: FC<{

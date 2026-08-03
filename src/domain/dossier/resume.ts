@@ -40,7 +40,7 @@ export class ResumeAssemblyError extends Error {
 /** Problems worth showing that do not prevent rendering. */
 export interface AssemblyWarning {
   readonly factId: FactId;
-  readonly reason: "bullet-without-parent" | "parent-not-selected";
+  readonly reason: "bullet-without-parent" | "parent-not-selected" | "narrative-not-in-resume";
 }
 
 export interface AssembledResume {
@@ -141,6 +141,12 @@ export function assembleResume(
         break;
       case "bullet":
         break; // handled above
+      case "narrative":
+        // Narrative facts are cover-letter source material, not resume lines.
+        // Selecting one into a resume variant is a mistake worth surfacing
+        // rather than a silent omission.
+        warnings.push({ factId: fact.id, reason: "narrative-not-in-resume" });
+        break;
       case "role":
       case "project":
       case "education": {

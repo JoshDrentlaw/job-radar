@@ -15,7 +15,7 @@ is deliberately not here yet.
 | **M2 — More adapters** | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
 | **M3 — Matching**      | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
 | **M4 — Dossier**       | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
-| M5 — Tailoring         | Not started                                                                                   |
+| **M5 — Tailoring**     | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
 | M6 — Pipeline + n8n    | Not started                                                                                   |
 | M7 — Polish            | Not started                                                                                   |
 
@@ -49,13 +49,15 @@ deno task start               # http://127.0.0.1:8000
 Every task declares an explicit allowlist — no blanket `-A`. The app runs with network access
 limited to Postgres, its own listen port, the three implemented feed hosts
 (`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`), and the embedding API
-(`api.voyageai.com`). **Adding an adapter means adding its host to the `dev` and `start` tasks**,
-and until you do, the adapter will fail loudly rather than succeed quietly. That is the intended
-behaviour.
+(`api.voyageai.com`), and the Anthropic API (`api.anthropic.com`). **Adding an adapter means adding
+its host to the `dev` and `start` tasks**, and until you do, the adapter will fail loudly rather
+than succeed quietly. That is the intended behaviour.
 
 `PG*` appears in the env allowlist because postgres.js probes those variables for connection
-defaults during option parsing. Deno supports prefix wildcards; everything outside the listed names
-and that prefix is still denied.
+defaults during option parsing, and `ANTHROPIC_*` because the Anthropic SDK resolves credentials and
+log settings from the environment at construction. Deno supports prefix wildcards; everything
+outside the listed names and those prefixes is still denied — including in the test tasks, which
+declare the same scoped list rather than a blanket `--allow-env`.
 
 ## Layout
 
@@ -198,6 +200,44 @@ renderer never sees the database. Tests assert the same variant renders byte-ide
 output was additionally validated with independent parsers (zip CRC + XML well-formedness, and an
 xref-offset audit of the PDF).
 
+### Tailoring (M5)
+
+**The fabrication constraint is structural, not a prompt.** The tailoring call receives the fact set
+and the target posting, and `output_config.format` constrains the reply to
+`{factId, rewrittenText, rationale}[]` — the API enforces the shape rather than the prompt asking
+for it. Then, in order: **a response citing a `factId` that is not in the set sent rejects the whole
+response**, naming every bad id (not the offending row — the whole thing; a model that invents
+identifiers was not working from the facts it was given, and its other rows are not trustworthy
+either). A retired fact counts as absent, because it was never sent.
+
+**Drift detection** (`drift.ts`) runs on every surviving rewrite and feeds the review queue's
+ordering. Two lexical signals, both free: token-overlap similarity catches wholesale rewrites, and
+**novel specifics** — numbers and mid-sentence proper nouns present in the rewrite but absent from
+its source — catch the dangerous case an embedding check would miss entirely. A fabricated metric
+("cutting latency by 40%") is _highly_ similar to its source; it is the new `40%` that gives it
+away. Flagging is advisory: every rewrite is reviewed regardless, so this only decides what the
+reviewer looks at first.
+
+**Nothing enters a variant unreviewed.** Proposals are stored in their own table and shown
+side-by-side with the canonical fact; accepting is the only code path in the application that puts
+model-authored text into a variant, and it runs after a human clicks. Rejecting records the decision
+and changes nothing. The canonical fact is never touched either way.
+
+**Cover letters** follow the same rule with per-paragraph citations: each paragraph carries the ids
+of the facts it rests on, an unknown citation voids the whole letter, and a paragraph citing nothing
+is rejected outright. The review page shows each paragraph beside its cited facts verbatim, so
+"traceable" is something the reader checks rather than takes on faith. The prompt forbids claiming
+enthusiasm or knowledge of the company — there are no facts about how the writer feels, so there is
+nothing to write.
+
+**Prompt caching** (§3) puts the fact corpus in a system block with a cache breakpoint and the
+posting — different every call — in `messages`, after it. Caching is a prefix match, so that
+ordering is the whole trick; a unit test asserts the breakpoint lands on the corpus and never on the
+posting.
+
+Without `ANTHROPIC_API_KEY` the app runs fine and the dossier pages say what is unavailable — the
+fact set and variants work by hand, which is how M4 proved the data model.
+
 ## Open questions from the brief
 
 Flagged rather than guessed.
@@ -218,7 +258,12 @@ Flagged rather than guessed.
    indistinguishable from an in-office role at this layer. What remains open is only whether
    `unknown` should render at all in list views.
 
-4. **Whether the fact set needs a separate narrative layer** — untouched; M4/M5 territory.
+4. **Whether the fact set needs a separate narrative layer for cover letters** — resolved in M5:
+   yes. `narrative` is a fact kind, so cover-letter source material carries exactly the same
+   traceability guarantee as a resume bullet — same table, same citation rule, same refusal to
+   invent. It is simply not resume-shaped, so the resume assembler skips it and warns if one is
+   selected into a resume variant. The alternative — a parallel table — would have needed its own
+   review flow and its own version of the fabrication constraint, for no gain.
 
 ## Not here, on purpose
 
