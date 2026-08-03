@@ -17,7 +17,7 @@ is deliberately not here yet.
 | **M4 — Dossier**        | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
 | **M5 — Tailoring**      | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
 | **M6 — Pipeline + n8n** | Done. Applications with an append-only timeline, bearer-authenticated job routes, ghosting.   |
-| M7 — Polish             | Not started                                                                                   |
+| **M7 — Polish**         | Done. Passkeys, vocabulary-gap detection, a dashboard that knows what the app now does.       |
 
 ## Stack
 
@@ -43,6 +43,9 @@ deno task start               # http://127.0.0.1:8000
 
 `deno task dev` for watch mode. `deno task check` runs typecheck, lint and format check.
 `deno task test:unit` runs the parser and domain tests; no database needed.
+
+Passkeys need a secure context, which means HTTPS in production or `localhost` in development. The
+account page says so plainly when the configured base URL is neither.
 
 ### Permissions
 
@@ -74,12 +77,15 @@ src/
   adapters/llm/      Anthropic client behind the LlmClient port
   adapters/render/   deterministic PDF and DOCX writers
   auth/              argon2id, sessions, CSRF, rate limiting, default-deny
+    webauthn/          CBOR, COSE keys, ceremony verification
   platform/          config, logging, db, migrations, ids, hashing, clock
   web/               Hono app, routes, JSX
 static/app.css       the entire stylesheet
+static/webauthn.js   the only client-side script, and only because WebAuthn needs one
 test/
   unit/              parser and domain tests, no database required
-  fixtures/          live feed payloads, trimmed at tag boundaries — real shapes, not invented ones
+  fixtures/          live feed payloads and real WebAuthn ceremonies — real shapes, not invented ones
+  tools/             the Chromium script that regenerates the WebAuthn fixtures
 ```
 
 The three bounded contexts get separate Postgres schema namespaces: `discovery`, `dossier`,
@@ -283,6 +289,84 @@ totals — a total whose denominator was lost is the artifact §10 exists to pre
 
 **Applying is still a deliberate human act.** The application detail page is a set of
 clipboard-ready fields and links; nothing posts anything anywhere.
+
+### Passkeys (M7)
+
+**A second way in, not a replacement.** The password stays, because a single-user application whose
+only credential lives on one device is one lost phone away from being locked out of itself.
+
+**The verifier is written here rather than pulled in**, and that is a real trade worth stating.
+`@simplewebauthn/server` brings roughly twenty packages — asn1js, x509, tsyringe, reflect-metadata —
+almost entirely to evaluate _attestation_, the question "is this authenticator model one I trust?"
+that an enterprise asks about hardware it did not buy. There is one user here enrolling their own
+devices from inside an already-authenticated session; the answer is yes every time, so the
+registration options ask for `attestation: "none"` and nothing evaluates it. What remains is CBOR
+parsing and ceremony checks, with WebCrypto doing the actual cryptography — no hand-rolled
+primitives. The cost is that a passkey bug is now ours; the mitigation is below.
+
+The pieces: a CBOR decoder covering exactly the canonical subset CTAP2 mandates, with indefinite
+lengths, tags, duplicate keys and trailing bytes all refused rather than tolerated; COSE→JWK import
+for ES256 and RS256, with every other algorithm refused **by name** rather than silently attempted;
+and the DER→raw ECDSA signature conversion that quietly breaks naive implementations. Every check in
+the ceremony is annotated with the hole it closes — origin, rpId hash, ceremony type, user presence,
+user verification, signature, and the use counter that detects a cloned authenticator.
+
+**User verification is required on both ceremonies.** A passkey here signs you in on its own, so a
+device that proves only presence ("someone touched this key") and not identity is not enough.
+Credentials are **discoverable**, so signing in needs no username first — with one user and no
+registration route, asking "who are you?" before "prove it" would be theatre.
+
+**Challenges are consumed in a single atomic `UPDATE`.** A read followed by a write is a race that
+permits a replay, which is the one thing a challenge exists to prevent. Verified against a real
+database: single-use, purpose-scoped, expiry enforced in the same statement, and exactly one winner
+in a race of eight concurrent consumers.
+
+**Verified, not assumed.** The fixtures in `test/fixtures/webauthn/` are real payloads from
+Chromium's virtual authenticator over CDP, including a deliberately UV-less one, and 23 unit tests
+run against them. The whole flow was then driven end-to-end in a real browser against a real
+Postgres — register, sign out, sign in with the passkey alone, replay refused, remove, refused again
+— and with JavaScript disabled the button never appears and the password form still works.
+
+`static/webauthn.js` is the only client-side script in the application, and it exists only because
+`navigator.credentials` is a browser API that no amount of server rendering reaches. The passkey
+controls ship hidden in the markup and that file is what reveals them.
+
+### Vocabulary gaps (M7)
+
+M3 answers this per posting: which passages of _this_ job have no strong support in the profile.
+This answers it across the corpus — which terms keep appearing in the roles being matched and appear
+nowhere in what you have written about yourself.
+
+**The honest limit is the headline, not a footnote: a gap cannot tell a missing skill from a missing
+word.** "Terraform" in nineteen postings and nowhere in your profile might mean you have never used
+it, or that you wrote "infrastructure as code" and never named the tool. Those need opposite
+responses, and nothing on the page can distinguish them, so it counts and refuses to conclude —
+which also keeps it from reading as an invitation to pad a resume (§8).
+
+Three situations, separated because they need different answers: absent from both corpora; in the
+profile but not the fact set (matching finds these roles, no resume can cite them); in the fact set
+but not the profile (the resume can claim it, matching cannot see it, so those roles are being
+scored without the evidence that would have matched them).
+
+No model and no embeddings — counting, which is checkable, so every term carries the postings it
+came from. Document frequency, not term frequency. Phrases as well as words, with a segment rule so
+no phrase is ever invented across a sentence break or the join between a title and its body
+("platform kubernetes" is not a term anybody wrote), and a phrase subsumes its parts when it covers
+the same postings.
+
+### The friction six milestones surfaced (M7)
+
+**The dashboard had never been revisited.** It knew about boards and postings and nothing about
+matching, tailoring or applications — most of what the application now does. It now opens with
+"waiting for you": unreviewed proposals first (a model wrote them and nobody has looked), then
+applications still drafting, then ones going quiet _before_ the window closes rather than after,
+then boards that cannot be read. Panels with nothing in them do not render.
+
+**The ghosting window was a knob with no handle** — read by the sweep, settable from nowhere. It now
+lives on the page it governs.
+
+**Matches had no search** while `/postings` had one from M1, which made a long strong bucket hard to
+work through.
 
 ## Open questions from the brief
 

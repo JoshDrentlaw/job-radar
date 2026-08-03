@@ -52,6 +52,19 @@ export interface TailoringRepo {
   proposalsFor(runId: string): Promise<StoredProposal[]>;
   getProposal(id: string): Promise<StoredProposal | null>;
   decide(id: string, decision: Exclude<ProposalDecision, "pending">): Promise<void>;
+  /** Proposals nobody has decided yet, with the run each belongs to. */
+  pendingRuns(): Promise<readonly PendingRun[]>;
+}
+
+/** A tailoring run with undecided proposals still sitting in it. */
+export interface PendingRun {
+  readonly runId: string;
+  readonly variantId: VariantId;
+  readonly variantName: string;
+  readonly postingTitle: string;
+  readonly pending: number;
+  readonly flagged: number;
+  readonly createdAt: Date;
 }
 
 /** Cover letters. */

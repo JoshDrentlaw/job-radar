@@ -25,7 +25,9 @@ import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
   type ApplicationSummary,
+  DEFAULT_GHOST_AFTER_DAYS,
   DuplicateApplicationError,
+  GHOST_AFTER_DAYS_SETTING,
   isApplicationStatus,
   TERMINAL_STATUSES,
 } from "@domain/pipeline/types.ts";
@@ -60,6 +62,7 @@ const ListPage: FC<{
   applications: readonly ApplicationSummary[];
   counts: Map<ApplicationStatus, number>;
   includeClosed: boolean;
+  ghostAfterDays: number;
   csrfToken: string;
   now: Date;
   notice?: string;
@@ -144,6 +147,31 @@ const ListPage: FC<{
             </table>
           </div>
         )}
+    </section>
+
+    <section class="panel">
+      <header>
+        <h2>When silence becomes ghosted</h2>
+      </header>
+      <p class="panel-note">
+        The sweep marks an application <code>ghosted</code>{" "}
+        after this many days with no activity. It is a name for a stale row, not an inference about
+        the employer — and logging anything that happened puts the clock back to zero.
+      </p>
+      <form method="post" action="/applications/settings" class="row gap-above">
+        <CsrfField token={props.csrfToken} />
+        <label for="ghost-after">Days of silence</label>
+        <input
+          id="ghost-after"
+          name="ghostAfterDays"
+          type="number"
+          min={1}
+          max={365}
+          value={props.ghostAfterDays}
+          required
+        />
+        <button type="submit" class="primary">Save</button>
+      </form>
     </section>
   </Layout>
 );
@@ -413,9 +441,10 @@ export const applicationRoutes = new Hono<AppEnv>();
 applicationRoutes.get("/applications", async (c) => {
   const services = c.get("services");
   const includeClosed = c.req.query("closed") !== undefined;
-  const [applications, counts] = await Promise.all([
+  const [applications, counts, ghostAfterDays] = await Promise.all([
     services.applications.list({ includeClosed }),
     services.applications.countByStatus(),
+    services.settings.get<number>(GHOST_AFTER_DAYS_SETTING),
   ]);
   const notice = c.req.query("notice");
   const error = c.req.query("error");
@@ -424,11 +453,36 @@ applicationRoutes.get("/applications", async (c) => {
       applications={applications}
       counts={counts}
       includeClosed={includeClosed}
+      ghostAfterDays={ghostAfterDays ?? DEFAULT_GHOST_AFTER_DAYS}
       csrfToken={c.get("csrfToken")}
       now={services.clock.now()}
       {...(notice !== undefined ? { notice } : {})}
       {...(error !== undefined ? { error } : {})}
     />,
+  );
+});
+
+/**
+ * The ghosting window. It was readable from the sweep and settable from
+ * nowhere — a knob with no handle.
+ */
+applicationRoutes.post("/applications/settings", async (c) => {
+  const body = await c.req.parseBody();
+  const days = Number(typeof body.ghostAfterDays === "string" ? body.ghostAfterDays : NaN);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    return c.redirect(
+      `/applications?error=${encodeURIComponent("Give a whole number of days between 1 and 365.")}`,
+      303,
+    );
+  }
+  await c.get("services").settings.set(GHOST_AFTER_DAYS_SETTING, days);
+  return c.redirect(
+    `/applications?notice=${
+      encodeURIComponent(
+        `Applications now go quiet after ${days} days. The next sweep uses the new window.`,
+      )
+    }`,
+    303,
   );
 });
 

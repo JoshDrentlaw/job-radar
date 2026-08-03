@@ -1079,3 +1079,28 @@ input[type="number"] {
     flex-basis: 100%;
   }
 }
+
+/* "Waiting for you" — the dashboard's first question. Urgent items are marked
+   by a rule, not by colour alone. */
+.waiting {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  & li {
+    padding-block: var(--space-s);
+    padding-inline-start: var(--space-m);
+    border-inline-start: 2px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  & li + li {
+    border-top: var(--border-width) solid var(--rule);
+  }
+
+  & li.urgent {
+    border-inline-start-color: var(--warn);
+  }
+}

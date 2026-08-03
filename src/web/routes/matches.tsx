@@ -105,6 +105,7 @@ const MatchesPage: FC<{
   thresholds: BucketThresholds;
   facets: readonly ProfileFacet[];
   facetFilter: FacetId | undefined;
+  search: string;
   embedBacklog: number;
   embedderConfigured: boolean;
   csrfToken: string;
@@ -157,17 +158,43 @@ const MatchesPage: FC<{
         </Notice>
       )}
 
-      {props.facets.length > 1 && (
-        <form method="get" action="/matches" class="row filter-row">
-          <label for="facet-filter">Facet</label>
-          <select id="facet-filter" name="facet">
-            <option value="">All facets</option>
-            {props.facets.map((f) => (
-              <option value={f.id} selected={props.facetFilter === f.id}>{f.name}</option>
-            ))}
-          </select>
-          <button type="submit" class="quiet">Filter</button>
-        </form>
+      {
+        /*
+        Searching matches was missing while /postings had it from M1, which
+        made a long strong bucket hard to work through.
+      */
+      }
+      <form method="get" action="/matches" class="row filter-row">
+        <label for="match-search">Search</label>
+        <input
+          id="match-search"
+          name="q"
+          type="search"
+          value={props.search}
+          placeholder="Title, company or location"
+        />
+        {props.facets.length > 1 && (
+          <>
+            <label for="facet-filter">Facet</label>
+            <select id="facet-filter" name="facet">
+              <option value="">All facets</option>
+              {props.facets.map((f) => (
+                <option value={f.id} selected={props.facetFilter === f.id}>{f.name}</option>
+              ))}
+            </select>
+          </>
+        )}
+        <button type="submit" class="quiet">Filter</button>
+        {(props.search !== "" || props.facetFilter !== undefined) && (
+          <a class="button quiet" href="/matches">Clear</a>
+        )}
+      </form>
+
+      {props.search !== "" && (
+        <p class="panel-note">
+          Showing matches whose title, company or location contains “{props.search}”. Counts below
+          are of what survived the filter, not of everything matched.
+        </p>
       )}
 
       <section class="panel">
@@ -331,6 +358,8 @@ matchRoutes.get("/matches", async (c) => {
     }
   }
 
+  const search = (c.req.query("q") ?? "").trim();
+
   const [candidates, thresholds, facets, backlog] = await Promise.all([
     services.matches.listCandidates(facetFilter !== undefined ? { facetId: facetFilter } : {}),
     loadBucketThresholds(services.settings),
@@ -340,12 +369,25 @@ matchRoutes.get("/matches", async (c) => {
 
   const notice = c.req.query("notice");
   const error = c.req.query("error");
+  // Filtered here rather than in SQL: the candidate set is a single user's, the
+  // page is not hot, and a repository method would have to reach into three
+  // columns to say what one `includes` says here.
+  const needle = search.toLowerCase();
+  const filtered = search === ""
+    ? candidates
+    : candidates.filter((candidate) =>
+      `${candidate.title} ${candidate.companyName} ${candidate.locationRaw}`
+        .toLowerCase()
+        .includes(needle)
+    );
+
   return c.html(
     <MatchesPage
-      groups={groupByPosting(candidates)}
+      groups={groupByPosting(filtered)}
       thresholds={thresholds}
       facets={facets.filter((f) => f.active)}
       facetFilter={facetFilter}
+      search={search}
       embedBacklog={backlog}
       embedderConfigured={services.embedder !== null}
       csrfToken={c.get("csrfToken")}

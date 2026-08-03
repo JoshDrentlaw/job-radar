@@ -1,6 +1,7 @@
 import type { Sql } from "@platform/db.ts";
 import type { FactId, PostingId, VariantId } from "@platform/ids.ts";
 import type {
+  PendingRun,
   ProposalDecision,
   StoredProposal,
   StoredRun,
@@ -149,5 +150,51 @@ export class PostgresTailoringRepo implements TailoringRepo {
       SET decision = ${decision}, decided_at = now()
       WHERE id = ${id} AND decision = 'pending'
     `;
+  }
+
+  /**
+   * The review queue, for the dashboard. Grouped by run because that is the
+   * page a reviewer opens; the posting title comes from the posting when it is
+   * still listed, and falls back to the id when the listing is gone (§4 — the
+   * run outlives the posting, so this cannot be an inner join).
+   */
+  async pendingRuns(): Promise<readonly PendingRun[]> {
+    const rows = await this.#sql<
+      {
+        run_id: string;
+        variant_id: string;
+        variant_name: string;
+        posting_title: string | null;
+        posting_id: string;
+        pending: string;
+        flagged: string;
+        created_at: Date;
+      }[]
+    >`
+      SELECT r.id            AS run_id,
+             r.variant_id    AS variant_id,
+             v.name          AS variant_name,
+             p.title         AS posting_title,
+             r.posting_id    AS posting_id,
+             count(*)::text  AS pending,
+             count(*) FILTER (WHERE pr.flagged)::text AS flagged,
+             r.created_at    AS created_at
+      FROM dossier.rewrite_proposals pr
+      JOIN dossier.tailoring_runs r ON r.id = pr.run_id
+      JOIN dossier.variants v ON v.id = r.variant_id
+      LEFT JOIN discovery.postings p ON p.id = r.posting_id
+      WHERE pr.decision = 'pending'
+      GROUP BY r.id, r.variant_id, v.name, p.title, r.posting_id, r.created_at
+      ORDER BY r.created_at DESC
+    `;
+    return rows.map((row) => ({
+      runId: row.run_id,
+      variantId: row.variant_id as VariantId,
+      variantName: row.variant_name,
+      postingTitle: row.posting_title ?? row.posting_id,
+      pending: Number(row.pending),
+      flagged: Number(row.flagged),
+      createdAt: row.created_at,
+    }));
   }
 }
