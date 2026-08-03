@@ -26,6 +26,32 @@ export function base64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
+export class Base64UrlError extends Error {
+  override readonly name = "Base64UrlError";
+}
+
+/**
+ * Strict base64url decoding. Every WebAuthn payload arrives this way and is
+ * attacker-supplied, so padding characters, whitespace and the standard
+ * base64 alphabet are all rejected rather than quietly accepted — one encoding,
+ * one meaning.
+ */
+export function fromBase64Url(value: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]*$/.test(value)) {
+    throw new Base64UrlError("Not base64url");
+  }
+  if (value.length % 4 === 1) throw new Base64UrlError("Truncated base64url");
+  const padded = value.replaceAll("-", "+").replaceAll("_", "/") +
+    "=".repeat((4 - (value.length % 4)) % 4);
+  let binary: string;
+  try {
+    binary = atob(padded);
+  } catch {
+    throw new Base64UrlError("Not base64url");
+  }
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
 /**
  * Compare two strings without leaking their common prefix through timing.
  * Used for CSRF tokens, where the value is attacker-influenced.

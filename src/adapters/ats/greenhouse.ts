@@ -28,8 +28,13 @@ import { FetchFailure, type PoliteFetcher } from "./http.ts";
 /**
  * Bumped whenever this parser's output could change for identical input.
  * Recorded on every posting it produces (§5).
+ *
+ * greenhouse/2: the shared HTML→markdown converter learned to find list items
+ * through wrapper elements (a Lever-observed pattern). Output changes only
+ * where a board wraps `<li>` runs in a `<div>` — and where it does, the old
+ * output had dropped those items.
  */
-export const GREENHOUSE_ADAPTER_VERSION = "greenhouse/1";
+export const GREENHOUSE_ADAPTER_VERSION = "greenhouse/2";
 
 const BASE_URL = "https://boards-api.greenhouse.io/v1/boards";
 

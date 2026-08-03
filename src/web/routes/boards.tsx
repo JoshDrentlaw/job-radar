@@ -17,7 +17,16 @@ import type { Board, Snapshot } from "@domain/discovery/types.ts";
 import { collect } from "@domain/discovery/collect.ts";
 
 /** Platforms with an adapter today. The rest are listed but not selectable. */
-const IMPLEMENTED: ReadonlySet<string> = new Set(["greenhouse"]);
+const IMPLEMENTED: ReadonlySet<string> = new Set(["greenhouse", "lever", "ashby"]);
+
+/** A malformed id in the path is a 404, not an exception (IdError) escaping as a 500. */
+function parseBoardId(raw: string): BoardId | null {
+  try {
+    return asBoardId(raw);
+  } catch {
+    return null;
+  }
+}
 
 interface BoardsPageProps {
   readonly boards: readonly Board[];
@@ -348,12 +357,8 @@ boardRoutes.post("/boards", async (c) => {
 
 boardRoutes.get("/boards/:id", async (c) => {
   const services = c.get("services");
-  let id: BoardId;
-  try {
-    id = asBoardId(c.req.param("id"));
-  } catch {
-    return c.notFound();
-  }
+  const id = parseBoardId(c.req.param("id"));
+  if (id === null) return c.notFound();
 
   const board = await services.boards.get(id);
   if (board === null) return c.notFound();
@@ -377,12 +382,8 @@ boardRoutes.get("/boards/:id", async (c) => {
 /** Fetch a single board. Shares the collection use-case, scoped to one id. */
 boardRoutes.post("/boards/:id/fetch", async (c) => {
   const services = c.get("services");
-  let id: BoardId;
-  try {
-    id = asBoardId(c.req.param("id"));
-  } catch {
-    return c.notFound();
-  }
+  const id = parseBoardId(c.req.param("id"));
+  if (id === null) return c.notFound();
 
   const board = await services.boards.get(id);
   if (board === null) return c.notFound();
@@ -410,14 +411,16 @@ boardRoutes.post("/boards/:id/fetch", async (c) => {
 });
 
 boardRoutes.post("/boards/:id/deactivate", async (c) => {
-  const id = asBoardId(c.req.param("id"));
+  const id = parseBoardId(c.req.param("id"));
+  if (id === null) return c.notFound();
   await c.get("services").boards.deactivate(id);
   return c.redirect("/boards?notice=Board+deactivated.", 303);
 });
 
 boardRoutes.post("/boards/:id/activate", async (c) => {
   const services = c.get("services");
-  const id = asBoardId(c.req.param("id"));
+  const id = parseBoardId(c.req.param("id"));
+  if (id === null) return c.notFound();
   const board = await services.boards.get(id);
   if (board === null) return c.notFound();
   await services.boards.upsert({
@@ -432,7 +435,8 @@ boardRoutes.post("/boards/:id/activate", async (c) => {
 });
 
 boardRoutes.post("/boards/:id/delete", async (c) => {
-  const id = asBoardId(c.req.param("id"));
+  const id = parseBoardId(c.req.param("id"));
+  if (id === null) return c.notFound();
   await c.get("services").boards.remove(id);
   return c.redirect("/boards?notice=Board+removed.", 303);
 });

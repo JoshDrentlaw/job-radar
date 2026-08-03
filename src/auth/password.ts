@@ -19,7 +19,7 @@ export const ARGON2_PARAMS = {
   hashLengthBytes: 32,
 } as const;
 
-const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 12;
 
 export class WeakPasswordError extends Error {
   override readonly name = "WeakPasswordError";

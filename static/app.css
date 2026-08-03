@@ -753,3 +753,354 @@ button,
   font-size: var(--step--1);
   color: var(--ink-muted);
 }
+
+/* ------------------------------------------------------- M3: matching ----- */
+
+/* The profile editor: long-form markdown wants a writing surface, not a
+   form field. */
+textarea.editor {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  min-height: 16lh;
+  line-height: 1.6;
+  background: var(--bg-raised);
+}
+
+input[type="number"] {
+  width: 100%;
+  font: inherit;
+  font-size: var(--step-0);
+  color: var(--ink);
+  background: var(--bg);
+  border: var(--border-width) solid var(--rule-strong);
+  border-radius: var(--radius-s);
+  padding: var(--space-xs) var(--space-s);
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+}
+
+.danger-text {
+  color: var(--danger);
+}
+
+.filter-row {
+  align-items: center;
+  margin-block-end: var(--space-m);
+
+  & label {
+    margin: 0;
+  }
+
+  & select {
+    width: auto;
+  }
+}
+
+/* Match cards. One per posting; the quote is the reasoning (§7). */
+.match-card {
+  padding-block: var(--space-m);
+
+  & + .match-card {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+.match-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-s);
+}
+
+.match-facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  justify-content: end;
+}
+
+.match-quote {
+  margin: var(--space-s) 0 var(--space-2xs);
+  padding: var(--space-s) var(--space-m);
+  border-inline-start: 3px solid var(--accent);
+  background: var(--bg-sunken);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  font-size: var(--step--1);
+  line-height: 1.55;
+  color: var(--ink-muted);
+  white-space: pre-line;
+  max-height: 14lh;
+  overflow: hidden;
+
+  &.gap {
+    border-inline-start-color: var(--warn);
+  }
+}
+
+/* The weak bucket collapses; no script needed. */
+.panel details {
+  & summary {
+    cursor: pointer;
+    list-style-position: outside;
+
+    & h2 {
+      display: inline;
+      font-size: var(--step-1);
+    }
+  }
+
+  &[open] summary {
+    margin-block-end: var(--space-s);
+  }
+}
+
+/* Tuning histogram: server-rendered bars, the one place raw floats live. */
+.histogram {
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  height: 11rem;
+  padding: var(--space-s);
+  background: var(--bg-sunken);
+  border-radius: var(--radius-s);
+}
+
+.histogram-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: end;
+}
+
+.histogram-fill {
+  width: 100%;
+  min-height: 1px;
+  border-radius: 2px 2px 0 0;
+  background: var(--rule-strong);
+}
+
+.histogram-bar.strong .histogram-fill {
+  background: var(--ok);
+}
+
+.histogram-bar.plausible .histogram-fill {
+  background: var(--warn);
+}
+
+.histogram-bar.weak .histogram-fill {
+  background: var(--rule-strong);
+}
+
+/* -------------------------------------------------------- M4: dossier ---- */
+
+.fact-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-m);
+  padding-block: var(--space-s);
+
+  & + .fact-row {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+/* A parent fact and its bullets. Grouping keeps a role and its bullets from
+   being separated by the row rules. */
+.fact-group + .fact-group {
+  border-top: var(--border-width) solid var(--rule);
+}
+
+.fact-indent {
+  margin-inline-start: var(--space-xl);
+}
+
+.fact-retired {
+  opacity: 0.55;
+}
+
+.fact-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.fact-text {
+  margin-block: var(--space-3xs);
+  line-height: 1.5;
+}
+
+.fact-actions {
+  display: flex;
+  gap: var(--space-2xs);
+  align-items: start;
+  flex-shrink: 0;
+}
+
+.fact-edit {
+  & summary {
+    cursor: pointer;
+    list-style: none;
+  }
+}
+
+.fact-edit-body {
+  margin-block-start: var(--space-s);
+  padding: var(--space-s);
+  background: var(--bg-sunken);
+  border-radius: var(--radius-s);
+}
+
+/* Rewritten wording next to its canonical fact: the original never hides. */
+.rewrite-pair {
+  display: grid;
+  gap: var(--space-xs);
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+}
+
+.rewrite-original {
+  color: var(--ink-faint);
+  text-decoration: line-through solid color-mix(in srgb, var(--ink-faint) 40%, transparent);
+  text-decoration-thickness: 1px;
+}
+
+.warn-text {
+  color: var(--warn);
+}
+
+/* ------------------------------------------------------ M5: tailoring ----- */
+
+/* A proposed rewrite awaiting review. The flagged treatment is deliberately
+   loud: these are where invented specifics show up. */
+.proposal {
+  padding-block: var(--space-m);
+
+  & + .proposal {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+.proposal-flagged {
+  border-inline-start: 3px solid var(--warn);
+  padding-inline-start: var(--space-m);
+  margin-inline-start: calc(-1 * var(--space-m));
+}
+
+/* Facts a cover-letter paragraph claims to rest on. */
+.citation-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2xs) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+
+  & li {
+    font-size: var(--step--1);
+    line-height: 1.5;
+    color: var(--ink-muted);
+    padding-inline-start: var(--space-s);
+    border-inline-start: 2px solid var(--rule);
+  }
+}
+
+/* ------------------------------------------------------- M6: pipeline ----- */
+
+/* Fields laid out for copying into someone else's form. Read-only inputs
+   rather than plain text so a click-and-select actually grabs the value. */
+.copy-grid {
+  display: grid;
+  gap: var(--space-s);
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+}
+
+.copy-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+}
+
+.copy-label {
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+
+.copy-value {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+}
+
+/* The one-time token reveal. Loud on purpose — it is never shown again. */
+.token-reveal {
+  font-size: var(--step-0);
+  border-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  & li {
+    padding-block: var(--space-s);
+    padding-inline-start: var(--space-m);
+    border-inline-start: 2px solid var(--rule);
+  }
+
+  & li + li {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+/* The passkey controls. Hidden in the markup and revealed by script, so the
+   layout must not reserve space for something that may never appear. */
+.passkey-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+
+  & [hidden] {
+    display: none;
+  }
+
+  & .notice {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  & .field-hint {
+    flex-basis: 100%;
+  }
+}
+
+/* "Waiting for you" — the dashboard's first question. Urgent items are marked
+   by a rule, not by colour alone. */
+.waiting {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  & li {
+    padding-block: var(--space-s);
+    padding-inline-start: var(--space-m);
+    border-inline-start: 2px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  & li + li {
+    border-top: var(--border-width) solid var(--rule);
+  }
+
+  & li.urgent {
+    border-inline-start-color: var(--warn);
+  }
+}

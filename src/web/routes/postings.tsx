@@ -23,9 +23,24 @@ import {
 } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asBoardId, asPostingId, type BoardId } from "@platform/ids.ts";
-import type { Board, Posting } from "@domain/discovery/types.ts";
+import type { Board, Compensation, Posting } from "@domain/discovery/types.ts";
 
 const PAGE_SIZE = 25;
+
+/**
+ * The source's own wording wins when it exists; the structured fields are the
+ * fallback rendering, not a reinterpretation.
+ */
+function formatCompensation(comp: Compensation): string {
+  if (comp.raw !== undefined && comp.raw.trim() !== "") return comp.raw;
+  const amounts = [comp.minAmount, comp.maxAmount]
+    .filter((v): v is number => v !== undefined)
+    .map((v) => v.toLocaleString("en-US"));
+  if (amounts.length === 0) return "published, but in no structure this app recognizes";
+  const range = [...new Set(amounts)].join("–");
+  const withCurrency = comp.currency !== undefined ? `${comp.currency} ${range}` : range;
+  return comp.interval !== undefined ? `${withCurrency} / ${comp.interval}` : withCurrency;
+}
 
 interface ListProps {
   readonly postings: readonly Posting[];
@@ -254,11 +269,15 @@ const PostingDetailPage: FC<{ posting: Posting; company: string; csrfToken: stri
             )}
             <div>
               <label>Work arrangement</label>
-              {p.derived !== null
+              {p.workplaceRaw !== undefined
+                ? <Asserted>{p.workplaceRaw}</Asserted>
+                : p.derived !== null
                 ? <RemoteHintChip hint={p.derived.remoteHint} />
                 : <span class="chip muted">not derived</span>}
               <p class="field-hint">
-                Inferred from the location string. This feed publishes no work-arrangement field.
+                {p.workplaceRaw !== undefined
+                  ? "As published by the feed."
+                  : "Inferred from the location string. This feed publishes no work-arrangement field."}
               </p>
             </div>
           </div>
@@ -267,7 +286,7 @@ const PostingDetailPage: FC<{ posting: Posting; company: string; csrfToken: stri
               <label>Compensation</label>
               {p.compensation === undefined
                 ? <span class="chip muted">not published by this source</span>
-                : <Asserted>{JSON.stringify(p.compensation)}</Asserted>}
+                : <Asserted>{formatCompensation(p.compensation)}</Asserted>}
             </div>
             <div>
               <label>Published</label>

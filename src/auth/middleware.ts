@@ -24,7 +24,15 @@ import { SESSION_COOKIE } from "./session.ts";
  * The complete public surface. Exact matches only, except for the static asset
  * prefix — which serves the login page's own stylesheet and holds no data.
  */
-const PUBLIC_PATHS: ReadonlySet<string> = new Set(["/login", "/healthz"]);
+const PUBLIC_PATHS: ReadonlySet<string> = new Set([
+  "/login",
+  "/healthz",
+  // The passkey sign-in ceremony. Public for the same reason the login form is:
+  // it is how you get a session. Both still go through CSRF and the login rate
+  // limiter, and neither reveals whether a credential exists.
+  "/login/passkey/options",
+  "/login/passkey",
+]);
 const PUBLIC_PREFIXES: readonly string[] = ["/static/"];
 
 export function isPublicPath(path: string): boolean {
@@ -73,9 +81,9 @@ export function sessionMiddleware(deps: AuthMiddlewareDeps): MiddlewareHandler<A
     }
 
     if (user === null && !isPublicPath(c.req.path)) {
-      const target = c.req.path + (c.req.url.includes("?") ? `?${new URL(c.req.url).search}` : "");
-      const next = encodeURIComponent(target.startsWith("/") ? target : "/");
-      return c.redirect(`/login?next=${next}`, 302);
+      // URL.search is "" or already includes its leading "?".
+      const target = c.req.path + new URL(c.req.url).search;
+      return c.redirect(`/login?next=${encodeURIComponent(target)}`, 302);
     }
 
     await next();

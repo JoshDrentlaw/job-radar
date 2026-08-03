@@ -13,6 +13,7 @@ import { loadConfig } from "@platform/config.ts";
 import { createLogger } from "@platform/logger.ts";
 import { closeDb, createDb } from "@platform/db.ts";
 import { PostgresUserRepo } from "@adapters/db/user-repo.ts";
+import { PostgresSessionRepo } from "@adapters/db/session-repo.ts";
 import { assertAcceptablePassword, hashPassword, WeakPasswordError } from "@auth/password.ts";
 
 async function main(): Promise<number> {
@@ -52,8 +53,11 @@ async function main(): Promise<number> {
         return 1;
       }
       await users.updatePasswordHash(existing.id, await hashPassword(password));
+      // A password reset usually means the old one is suspect; anything still
+      // holding a session under it should not stay signed in.
+      await new PostgresSessionRepo(sql).revokeAllForUser(existing.id, new Date());
       logger.info("admin password reset", { username });
-      console.log(`Password updated for "${username}". Existing sessions remain valid.`);
+      console.log(`Password updated for "${username}". All existing sessions were signed out.`);
       return 0;
     }
 

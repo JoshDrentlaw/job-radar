@@ -1,0 +1,278 @@
+{
+ "jobs": [
+  {
+   "id": "34413f8d-26bf-4bbc-8ade-eb309a0e2245",
+   "title": " Security Engineer, Cloud",
+   "department": "Engineering",
+   "team": "Backend",
+   "employmentType": "FullTime",
+   "location": "New York, NY (HQ)",
+   "shouldDisplayCompensationOnJobPostings": true,
+   "secondaryLocations": [
+    {
+     "location": "Remote (Canada)",
+     "address": {
+      "postalAddress": {
+       "addressCountry": "Canada"
+      }
+     }
+    },
+    {
+     "location": "Remote (US)",
+     "address": {
+      "postalAddress": {
+       "addressCountry": "United States"
+      }
+     }
+    },
+    {
+     "location": "Miami, FL",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "Florida",
+       "addressCountry": "USA",
+       "addressLocality": "Miami"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2026-04-07T17:12:35.753+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Hybrid",
+   "address": {
+    "postalAddress": {
+     "addressRegion": "NY",
+     "addressCountry": "USA",
+     "addressLocality": "New York City"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/ramp/34413f8d-26bf-4bbc-8ade-eb309a0e2245",
+   "applyUrl": "https://jobs.ashbyhq.com/ramp/34413f8d-26bf-4bbc-8ade-eb309a0e2245/application",
+   "descriptionHtml": "<h1><strong>About Ramp</strong></h1><p style=\"min-height:1.5em\">Ramp is building the smart infrastructure for finance teams, embedded in the transaction flow of every dollar a business spends. We automate how over $200B in annualized spend flows in and out of 70,000+ companies: authorizing payments, flagging risk, categorizing spend, and closing books.</p><p style=\"min-height:1.5em\">The problems are high-stakes, data-dense, and unforgiving.</p>",
+   "descriptionPlain": "ABOUT RAMP\n\nRamp is building the smart infrastructure for finance teams, embedded in the transaction flow of every dollar a business spends. We automate how over $200B in annualized spend flows in and",
+   "compensation": {
+    "compensationTierSummary": "$211.4K \u2013 $290.6K \u2022 Offers Equity",
+    "scrapeableCompensationSalarySummary": "$211.4K - $290.6K",
+    "compensationTiers": [
+     {
+      "id": "5f7a903e-36e4-492c-ac09-f2745d717daa",
+      "tierSummary": "$211.4K \u2013 $290.6K \u2022 Offers Equity",
+      "title": null,
+      "additionalInformation": null,
+      "components": [
+       {
+        "id": "3481c194-45fd-4b89-8592-e8f4d4b51f20",
+        "summary": "$211.4K \u2013 $290.6K",
+        "compensationType": "Salary",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": 211400,
+        "maxValue": 290600
+       },
+       {
+        "id": "feaef96f-559f-4df8-a38c-3eee072a8d74",
+        "summary": "Offers Equity",
+        "compensationType": "EquityPercentage",
+        "interval": "NONE",
+        "currencyCode": null,
+        "minValue": null,
+        "maxValue": null
+       }
+      ]
+     }
+    ],
+    "summaryComponents": [
+     {
+      "compensationType": "Salary",
+      "interval": "1 YEAR",
+      "currencyCode": "USD",
+      "minValue": 211400,
+      "maxValue": 290600
+     },
+     {
+      "compensationType": "EquityPercentage",
+      "interval": "NONE",
+      "currencyCode": null,
+      "minValue": null,
+      "maxValue": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "18f58952-c242-4562-8732-073a0ae8029e",
+   "title": "Account Director - Tokyo",
+   "department": "Go To Market",
+   "team": "Sales",
+   "employmentType": "FullTime",
+   "location": "Tokyo, Japan",
+   "shouldDisplayCompensationOnJobPostings": false,
+   "secondaryLocations": [],
+   "publishedAt": "2026-01-23T00:17:18.483+00:00",
+   "isListed": true,
+   "isRemote": null,
+   "workplaceType": null,
+   "address": {
+    "postalAddress": {
+     "addressCountry": "Japan",
+     "addressLocality": "Tokyo"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/openai/18f58952-c242-4562-8732-073a0ae8029e",
+   "applyUrl": "https://jobs.ashbyhq.com/openai/18f58952-c242-4562-8732-073a0ae8029e/application",
+   "descriptionHtml": "<p style=\"min-height:1.5em\"><strong>About the team</strong></p><p style=\"min-height:1.5em\">OpenAI\u2019s mission is to build safe artificial general intelligence (AGI) which benefits all of humanity. This long-term undertaking brings the world\u2019s best scientists, engineers, and business professionals into one lab together to accomplish this.</p>",
+   "descriptionPlain": "About the team\n\nOpenAI\u2019s mission is to build safe artificial general intelligence (AGI) which benefits all of humanity. This long-term undertaking brings the world\u2019s best scientists, engineers, and bu",
+   "compensation": {
+    "compensationTierSummary": null,
+    "scrapeableCompensationSalarySummary": null,
+    "compensationTiers": [],
+    "summaryComponents": []
+   }
+  },
+  {
+   "id": "b9568fb8-a47e-4738-87fb-a6d88c3a505f",
+   "title": "Account Manager | Commercial",
+   "department": "Sales",
+   "team": "Account Manager",
+   "employmentType": "FullTime",
+   "location": "New York, NY (HQ)",
+   "shouldDisplayCompensationOnJobPostings": true,
+   "secondaryLocations": [
+    {
+     "location": "San Francisco, CA",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "California ",
+       "addressCountry": "USA",
+       "addressLocality": "San Fransisco"
+      }
+     }
+    },
+    {
+     "location": "Denver, CO",
+     "address": {
+      "postalAddress": {
+       "addressRegion": "Colorado",
+       "addressCountry": "United States",
+       "addressLocality": "Denver"
+      }
+     }
+    }
+   ],
+   "publishedAt": "2025-12-10T14:44:21.253+00:00",
+   "isListed": true,
+   "isRemote": true,
+   "workplaceType": "Hybrid",
+   "address": {
+    "postalAddress": {
+     "addressRegion": "NY",
+     "addressCountry": "USA",
+     "addressLocality": "New York City"
+    }
+   },
+   "jobUrl": "https://jobs.ashbyhq.com/ramp/b9568fb8-a47e-4738-87fb-a6d88c3a505f",
+   "applyUrl": "https://jobs.ashbyhq.com/ramp/b9568fb8-a47e-4738-87fb-a6d88c3a505f/application",
+   "descriptionHtml": "<h1><strong>About Ramp</strong></h1><p style=\"min-height:1.5em\">Ramp is building the smart infrastructure for finance teams, embedded in the transaction flow of every dollar a business spends. We automate how over $200B in annualized spend flows in and out of 70,000+ companies: authorizing payments, flagging risk, categorizing spend, and closing books.</p><p style=\"min-height:1.5em\">The problems are high-stakes, data-dense, and unforgiving.</p>",
+   "descriptionPlain": "ABOUT RAMP\n\nRamp is building the smart infrastructure for finance teams, embedded in the transaction flow of every dollar a business spends. We automate how over $200B in annualized spend flows in and",
+   "compensation": {
+    "compensationTierSummary": "$131K \u2013 $191K \u2022 Offers Equity \u2022 Offers Commission \u2022 Multiple Ranges",
+    "scrapeableCompensationSalarySummary": "$131K - $191K",
+    "compensationTiers": [
+     {
+      "id": "eb6269bc-c162-4fde-87ef-234fe3046814",
+      "tierSummary": "The listed range reflects total OTE with a 60/40 base-to-commission split. $145K \u2013 $191K \u2022 Offers Equity \u2022 Offers Commission \u2022 60/40 split",
+      "title": "NY/SF",
+      "additionalInformation": "60/40 split",
+      "components": [
+       {
+        "id": "af228559-d655-4089-ab0a-cb5639a3195c",
+        "summary": "Offers Commission",
+        "compensationType": "Commission",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": null,
+        "maxValue": null
+       },
+       {
+        "id": "e71dd729-71c3-4b16-9c9b-b7ce6b895899",
+        "summary": "Offers Equity",
+        "compensationType": "EquityCashValue",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": null,
+        "maxValue": null
+       },
+       {
+        "id": "5967792b-f3e2-4cf3-a86c-15c6c2f1d2c4",
+        "summary": "The listed range reflects total OTE with a 60/40 base-to-commission split. $145K \u2013 $191K",
+        "compensationType": "Salary",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": 145000,
+        "maxValue": 191000
+       }
+      ]
+     },
+     {
+      "id": "c7c2a021-4ed0-476f-9ff9-6e12cb95adb7",
+      "tierSummary": "The listed range reflects total OTE with a 60/40 base-to-commission split. $131K \u2013 $171K \u2022 Offers Equity \u2022 Offers Commission \u2022 60/40 split",
+      "title": "Nationwide",
+      "additionalInformation": "60/40 split",
+      "components": [
+       {
+        "id": "e8cff34a-dcc2-4e87-8394-b7e3ec1b0cbb",
+        "summary": "Offers Commission",
+        "compensationType": "Commission",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": null,
+        "maxValue": null
+       },
+       {
+        "id": "41b902bc-725e-4d50-94eb-b6312d340d6b",
+        "summary": "Offers Equity",
+        "compensationType": "EquityCashValue",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": null,
+        "maxValue": null
+       },
+       {
+        "id": "3557ebfd-c79d-45d6-af60-4bc3beb66046",
+        "summary": "The listed range reflects total OTE with a 60/40 base-to-commission split. $131K \u2013 $171K",
+        "compensationType": "Salary",
+        "interval": "1 YEAR",
+        "currencyCode": "USD",
+        "minValue": 131000,
+        "maxValue": 171000
+       }
+      ]
+     }
+    ],
+    "summaryComponents": [
+     {
+      "compensationType": "Commission",
+      "minValue": null,
+      "maxValue": null,
+      "interval": "1 YEAR"
+     },
+     {
+      "compensationType": "EquityCashValue",
+      "minValue": null,
+      "maxValue": null,
+      "interval": "1 YEAR"
+     },
+     {
+      "minValue": 131000,
+      "maxValue": 191000,
+      "currencyCode": "USD",
+      "interval": "1 YEAR",
+      "compensationType": "Salary"
+     }
+    ]
+   }
+  }
+ ],
+ "apiVersion": "1"
+}

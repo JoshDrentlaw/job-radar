@@ -26,8 +26,11 @@ import type { RemoteHint } from "./types.ts";
 /**
  * Bumped whenever the rules below change, and recorded on every derived row so
  * stale guesses can be found and recomputed.
+ *
+ * location/2: a source-asserted workplace label (Lever's and Ashby's
+ * `workplaceType`) now takes precedence over inference from the location string.
  */
-export const DERIVATION_VERSION = "location/1";
+export const DERIVATION_VERSION = "location/2";
 
 /** Feeds use bullets, pipes, semicolons and slashes interchangeably. */
 const SEPARATOR_PATTERN = /\s*[•|;]\s*|\s+\/\s+/g;
@@ -71,13 +74,39 @@ export function normalizeLocation(raw: string): string | null {
 }
 
 /**
+ * The labels the implemented feeds actually publish, measured live: Lever uses
+ * lowercase `remote | hybrid | onsite`, Ashby uses `Remote | Hybrid | OnSite`.
+ * Matching is exact-after-folding rather than substring, so an unexpected label
+ * ("remote-first culture!") falls through to the location-string rules instead
+ * of being over-read.
+ */
+const ASSERTED_WORKPLACE: ReadonlyMap<string, RemoteHint> = new Map([
+  ["remote", "remote"],
+  ["hybrid", "hybrid"],
+  ["onsite", "onsite"],
+  ["on-site", "onsite"],
+  ["on site", "onsite"],
+  ["in-office", "onsite"],
+  ["in office", "onsite"],
+]);
+
+/**
  * Derive a modality hint, or admit we do not know.
+ *
+ * When the feed asserts a workplace label (`workplaceRaw`), that assertion wins
+ * — deriving against it would replace a fact with a guess. The location-string
+ * inference only runs when the source said nothing.
  *
  * `unknown` is the expected answer for the majority of real postings, and that
  * is the point: it is the difference between "we have no information" and a
  * fabricated `onsite`.
  */
-export function deriveRemoteHint(raw: string): RemoteHint {
+export function deriveRemoteHint(raw: string, workplaceRaw?: string): RemoteHint {
+  if (workplaceRaw !== undefined) {
+    const asserted = ASSERTED_WORKPLACE.get(workplaceRaw.trim().toLowerCase());
+    if (asserted !== undefined) return asserted;
+  }
+
   const text = raw.trim();
   if (text === "") return "unknown";
 

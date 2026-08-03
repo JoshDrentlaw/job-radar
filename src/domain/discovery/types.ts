@@ -69,6 +69,13 @@ export interface SourcePosting {
   readonly title: string;
   /** The original string. Normalization happens alongside, never in place. */
   readonly locationRaw: string;
+  /**
+   * The feed's own workplace-modality label, verbatim, when it publishes one
+   * (Lever and Ashby both do; Greenhouse does not). This is an assertion, not
+   * a guess — the derived `remoteHint` prefers it over inferring from the
+   * location string, and the UI renders it as source-asserted.
+   */
+  readonly workplaceRaw?: string;
   readonly employmentType?: string;
   readonly department?: string;
   /** The feed's HTML, converted to markdown. */

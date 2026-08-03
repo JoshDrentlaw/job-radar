@@ -12,6 +12,8 @@ export interface AppEnv {
     logger: Logger;
     requestId: string;
     clientIp: string;
+    /** Set by the bearer middleware on the n8n job routes only. */
+    apiTokenLabel?: string;
     config: Config;
     services: Services;
   };

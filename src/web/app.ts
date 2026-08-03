@@ -17,6 +17,18 @@ import { loginRoutes } from "./routes/login.tsx";
 import { dashboardRoutes } from "./routes/dashboard.tsx";
 import { boardRoutes } from "./routes/boards.tsx";
 import { postingRoutes } from "./routes/postings.tsx";
+import { profileRoutes } from "./routes/profile.tsx";
+import { matchRoutes } from "./routes/matches.tsx";
+import { tuningRoutes } from "./routes/tuning.tsx";
+import { dossierRoutes } from "./routes/dossier.tsx";
+import { variantRoutes } from "./routes/variants.tsx";
+import { tailoringRoutes } from "./routes/tailoring.tsx";
+import { letterRoutes } from "./routes/letters.tsx";
+import { applicationRoutes } from "./routes/applications.tsx";
+import { tokenRoutes } from "./routes/tokens.tsx";
+import { accountRoutes } from "./routes/account.tsx";
+import { apiRoutes, bearerAuth } from "./routes/api.ts";
+import { gapRoutes } from "./routes/gaps.tsx";
 import { coverageRoutes } from "./routes/coverage.tsx";
 import { staticRoutes } from "./routes/static.ts";
 
@@ -26,24 +38,40 @@ export interface AppOptions {
   readonly logger?: Logger;
 }
 
+const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+const IPV6_CHARS = /^[0-9A-Fa-f:.]+$/;
+
+/** Loose but sufficient: rejects anything Postgres' inet type would choke on. */
+export function isIpLike(value: string): boolean {
+  const v4 = IPV4.exec(value);
+  if (v4 !== null) return v4.slice(1).every((octet) => Number(octet) <= 255);
+  return value.includes(":") && IPV6_CHARS.test(value);
+}
+
 /**
- * The app binds to localhost and sits behind nginx (§13), so the proxy is the
- * only thing that can reach it and its X-Forwarded-For is the client address.
- * The leftmost entry is the original client.
+ * The app binds to localhost and sits behind nginx (§13). With the standard
+ * `proxy_add_x_forwarded_for`, nginx *appends* the address it actually talked
+ * to, so the rightmost entry is the only one the proxy vouches for — everything
+ * left of it arrived in the client's own header and is attacker-chosen. Taking
+ * the leftmost would let a scanner rotate fake IPs past the login rate limiter.
+ * The value also feeds `::inet` casts, so anything that does not look like an
+ * IP is discarded rather than allowed to become a 500 at the database.
  */
-function clientIpOf(
+export function clientIpOf(
   c: { req: { header(name: string): string | undefined; raw: Request } },
 ): string {
   const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded !== undefined && forwarded.trim() !== "") {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first !== undefined && first !== "") return first;
+  if (forwarded !== undefined) {
+    const last = forwarded.split(",").at(-1)?.trim();
+    if (last !== undefined && isIpLike(last)) return last;
   }
   try {
-    return getConnInfo(c as never).remote.address ?? "0.0.0.0";
+    const address = getConnInfo(c as never).remote.address;
+    if (address !== undefined && isIpLike(address)) return address;
   } catch {
-    return "0.0.0.0";
+    // Fall through: no connection info outside a real Deno.serve handler.
   }
+  return "0.0.0.0";
 }
 
 export function createApp(options: AppOptions): Hono<AppEnv> {
@@ -72,6 +100,16 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   // Health check is public and deliberately says nothing about internals.
   app.get("/healthz", (c) => c.json({ status: "ok" }));
 
+  // The n8n job routes carry their own bearer auth and are mounted ahead of
+  // the session middleware (§11, §12). Two consequences, both deliberate: a
+  // session cookie grants nothing here, and CSRF does not apply — it exists
+  // because browsers attach cookies automatically, and nothing below reads one.
+  // The guard is on the prefix, so a job route added later is covered too.
+  app.use("/api/*", bearerAuth());
+  app.route("/", apiRoutes);
+  // Anything else under /api is not a job route and does not exist.
+  app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
+
   app.use(
     "*",
     sessionMiddleware({
@@ -86,6 +124,17 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.route("/", dashboardRoutes);
   app.route("/", boardRoutes);
   app.route("/", postingRoutes);
+  app.route("/", profileRoutes);
+  app.route("/", matchRoutes);
+  app.route("/", tuningRoutes);
+  app.route("/", dossierRoutes);
+  app.route("/", variantRoutes);
+  app.route("/", tailoringRoutes);
+  app.route("/", letterRoutes);
+  app.route("/", applicationRoutes);
+  app.route("/", tokenRoutes);
+  app.route("/", accountRoutes);
+  app.route("/", gapRoutes);
   app.route("/", coverageRoutes);
 
   app.notFound((c) => c.text("Not found.", 404));
