@@ -1,0 +1,8 @@
+# Secrets come from the environment, never the repo (§11).
+.env
+.env.*
+!.env.example
+
+# Deno
+deno.lock.bak
+/coverage/

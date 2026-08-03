@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS app.settings;
+DROP TABLE IF EXISTS app.login_attempts;
+DROP TABLE IF EXISTS app.sessions;
+DROP TABLE IF EXISTS app.users;
+
+DROP SCHEMA IF EXISTS pipeline;
+DROP SCHEMA IF EXISTS dossier;
+DROP SCHEMA IF EXISTS discovery;
+DROP SCHEMA IF EXISTS app;
