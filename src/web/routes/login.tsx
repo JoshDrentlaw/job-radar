@@ -5,15 +5,18 @@
  * account is created by the seed-admin task at deploy time.
  */
 
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { FC } from "hono/jsx";
 import { BareLayout } from "@web/layout.tsx";
 import { CsrfField, Notice } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
+import type { UserId } from "@platform/ids.ts";
 import { CSRF_COOKIE } from "@auth/csrf.ts";
 import { ABSOLUTE_LIFETIME_MS, SESSION_COOKIE } from "@auth/session.ts";
 import { verifyPassword } from "@auth/password.ts";
+import type { AuthenticationResponse } from "@auth/webauthn/ceremony.ts";
+import { WebAuthnError } from "@auth/webauthn/ceremony.ts";
 
 /**
  * Only same-site absolute paths are accepted as a post-login destination.
@@ -69,7 +72,29 @@ const LoginPage: FC<{ csrfToken: string; next: string; error?: string; notice?: 
         </div>
         <button type="submit" class="primary">Sign in</button>
       </form>
+
+      {
+        /*
+        Progressive enhancement, not a fallback (§3): this button ships hidden
+        and the script reveals it only where WebAuthn exists. With scripting
+        off, the password form above is the whole page and works.
+      */
+      }
+      <div class="passkey-row">
+        <button
+          type="button"
+          class="quiet"
+          hidden
+          data-passkey-signin
+          data-csrf={props.csrfToken}
+          data-next={props.next}
+        >
+          Sign in with a passkey
+        </button>
+        <p class="notice warn" hidden data-passkey-status></p>
+      </div>
     </section>
+    <script src="/static/webauthn.js" defer></script>
   </BareLayout>
 );
 
@@ -90,7 +115,6 @@ loginRoutes.get("/login", (c) => {
 
 loginRoutes.post("/login", async (c) => {
   const services = c.get("services");
-  const config = c.get("config");
   const logger = c.get("logger");
   const ip = c.get("clientIp");
 
@@ -132,9 +156,22 @@ loginRoutes.post("/login", async (c) => {
   }
 
   await services.rateLimiter.recordSuccess(ip, username);
-  const { token } = await services.sessions.issue(user.id, {
+  await startSession(c, user.id);
+
+  logger.info("login succeeded", { ip, userId: user.id, method: "password" });
+  return c.redirect(next, 303);
+});
+
+/**
+ * Issue the session cookie. Shared by both ways in, so a passkey sign-in and a
+ * password sign-in produce exactly the same session — same lifetime, same
+ * flags, same retirement of the pre-auth CSRF cookie.
+ */
+async function startSession(c: Context<AppEnv>, userId: UserId): Promise<void> {
+  const config = c.get("config");
+  const { token } = await c.get("services").sessions.issue(userId, {
     userAgent: c.req.header("user-agent") ?? null,
-    ip,
+    ip: c.get("clientIp"),
   });
 
   setCookie(c, SESSION_COOKIE, token, {
@@ -147,9 +184,74 @@ loginRoutes.post("/login", async (c) => {
   // The pre-auth CSRF cookie has done its job; the session-derived token
   // takes over from here.
   deleteCookie(c, CSRF_COOKIE, { path: "/" });
+}
 
-  logger.info("login succeeded", { ip, userId: user.id });
-  return c.redirect(next, 303);
+/**
+ * Hand the browser a challenge to sign. Deliberately says nothing about whether
+ * any passkey is registered — the options are identical either way, so this
+ * endpoint cannot be used to probe.
+ */
+loginRoutes.post("/login/passkey/options", async (c) => {
+  const services = c.get("services");
+  const decision = await services.rateLimiter.check(c.get("clientIp"));
+  if (!decision.allowed) {
+    c.header("Retry-After", String(decision.retryAfterSeconds));
+    return c.json(
+      { error: `Too many attempts. Try again in ${decision.retryAfterSeconds}s.` },
+      429,
+    );
+  }
+  return c.json(await services.passkeys.beginAuthentication());
+});
+
+loginRoutes.post("/login/passkey", async (c) => {
+  const services = c.get("services");
+  const logger = c.get("logger");
+  const ip = c.get("clientIp");
+
+  const decision = await services.rateLimiter.check(ip);
+  if (!decision.allowed) {
+    c.header("Retry-After", String(decision.retryAfterSeconds));
+    return c.json(
+      { error: `Too many attempts. Try again in ${decision.retryAfterSeconds}s.` },
+      429,
+    );
+  }
+
+  let body: AuthenticationResponse;
+  try {
+    body = await c.req.json() as AuthenticationResponse;
+  } catch {
+    return c.json({ error: "Malformed request." }, 400);
+  }
+
+  let credential;
+  try {
+    credential = await services.passkeys.finishAuthentication(body);
+  } catch (error) {
+    // Passkey failures share the login rate limiter with passwords: an attacker
+    // must not get an unthrottled oracle just by switching endpoint.
+    await services.rateLimiter.recordFailure(ip, "passkey");
+    if (error instanceof WebAuthnError) {
+      logger.warn("passkey sign-in refused", { ip, reason: error.message });
+      return c.json({ error: error.message }, 401);
+    }
+    throw error;
+  }
+
+  await services.rateLimiter.recordSuccess(ip, "passkey");
+  await startSession(c, credential.userId);
+
+  logger.info("login succeeded", {
+    ip,
+    userId: credential.userId,
+    method: "passkey",
+    credentialId: credential.id,
+  });
+  const next = safeRedirectTarget(
+    typeof (body as { next?: string }).next === "string" ? (body as { next?: string }).next : "/",
+  );
+  return c.json({ redirect: next });
 });
 
 loginRoutes.post("/logout", async (c) => {

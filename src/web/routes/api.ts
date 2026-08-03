@@ -224,9 +224,18 @@ apiRoutes.post("/api/jobs/sweep", async (c) => {
     c.get("logger").info("applications ghosted by rule", { count: stale.length, afterDays });
   }
 
+  // Expired credentials are not a pipeline concern, but they are housekeeping,
+  // and this is the only thing that runs on a schedule. Rows that can no longer
+  // authenticate anything should not accumulate forever.
+  const [sessions, challenges] = await Promise.all([
+    services.sessions.purgeExpired(),
+    services.passkeys.purgeExpiredChallenges(),
+  ]);
+
   return c.json({
     status: "ok",
     afterDays,
     ghosted: stale.map((a) => ({ id: a.id, title: a.postingTitle, company: a.companyName })),
+    purged: { sessions, webauthnChallenges: challenges },
   }, 200);
 });

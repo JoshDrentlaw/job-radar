@@ -27,7 +27,9 @@ import { PostgresTailoringRepo } from "@adapters/db/tailoring-repo.ts";
 import { PostgresDocumentRepo } from "@adapters/db/document-repo.ts";
 import { PostgresApplicationRepo } from "@adapters/db/application-repo.ts";
 import { PostgresApiTokenRepo } from "@adapters/db/api-token-repo.ts";
+import { PostgresChallengeRepo, PostgresCredentialRepo } from "@adapters/db/credential-repo.ts";
 import { ApiTokenService } from "@auth/api-token.ts";
+import { expectedOriginFrom, PasskeyService } from "@auth/webauthn/service.ts";
 import { AnthropicLlmClient } from "@adapters/llm/anthropic.ts";
 import { VoyageEmbedder } from "@adapters/embedding/voyage.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
@@ -104,6 +106,14 @@ const services: Services = {
   llm,
   applications: new PostgresApplicationRepo(sql),
   apiTokens: new ApiTokenService(new PostgresApiTokenRepo(sql), systemClock),
+  passkeys: new PasskeyService(
+    new PostgresCredentialRepo(sql),
+    new PostgresChallengeRepo(sql),
+    systemClock,
+    // Scoped to the configured base URL, never to the request's own Host
+    // header — which the client controls (§11).
+    expectedOriginFrom(config.baseUrl),
+  ),
   clock: systemClock,
   logger,
 };

@@ -49,6 +49,8 @@
   },
 
   "lint": {
+    // Browser code, linted for a server runtime it will never run in.
+    "exclude": ["static/webauthn.js"],
     "rules": {
       "tags": ["recommended"],
       "include": [
@@ -66,5 +68,10 @@
     "singleQuote": false
   },
 
-  "exclude": ["test/fixtures"]
+  "exclude": [
+    "test/fixtures",
+    // A one-off Node script that drives Chromium to produce the WebAuthn
+    // fixtures. It is not part of the suite and does not run under Deno.
+    "test/tools"
+  ]
 }

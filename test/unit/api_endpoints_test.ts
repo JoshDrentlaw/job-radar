@@ -288,6 +288,15 @@ class FakeApplications implements ApplicationRepo {
 }
 
 /**
+ * The sweep also purges rows that can no longer authenticate anything — the one
+ * scheduled thing in the application, so the housekeeping rides along.
+ */
+const HOUSEKEEPING = {
+  sessions: { purgeExpired: () => Promise.resolve(2) } as unknown as Services["sessions"],
+  passkeys: { purgeExpiredChallenges: () => Promise.resolve(3) } as unknown as Services["passkeys"],
+};
+
+/**
  * Anything the handler reaches for that the test did not provide is a failure,
  * not an `undefined` that silently changes the behaviour under test.
  */
@@ -548,7 +557,7 @@ Deno.test("sweep: stale applications are ghosted by rule, and the rule says so",
       eventCount: 2,
     },
   ]);
-  const app = await harness({ applications, settings: EMPTY_SETTINGS });
+  const app = await harness({ applications, settings: EMPTY_SETTINGS, ...HOUSEKEEPING });
 
   const res = await app.request("/api/jobs/sweep", authed(app.token));
   assertEquals(res.status, 200);
@@ -556,6 +565,7 @@ Deno.test("sweep: stale applications are ghosted by rule, and the rule says so",
   assertEquals(body.afterDays, DEFAULT_GHOST_AFTER_DAYS);
   assertEquals(body.ghosted.length, 1);
   assertEquals(body.ghosted[0].company, "Acme");
+  assertEquals(body.purged, { sessions: 2, webauthnChallenges: 3 });
 
   assertEquals(applications.changes.length, 1);
   assertEquals(applications.changes[0]?.to, "ghosted");
@@ -566,7 +576,7 @@ Deno.test("sweep: stale applications are ghosted by rule, and the rule says so",
 
 Deno.test("sweep: nothing stale is still a 200 with an empty list", async () => {
   const applications = new FakeApplications([]);
-  const app = await harness({ applications, settings: EMPTY_SETTINGS });
+  const app = await harness({ applications, settings: EMPTY_SETTINGS, ...HOUSEKEEPING });
   const res = await app.request("/api/jobs/sweep", authed(app.token));
   assertEquals(res.status, 200);
   assertEquals((await res.json()).ghosted, []);

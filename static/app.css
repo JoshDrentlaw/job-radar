@@ -1057,3 +1057,25 @@ input[type="number"] {
     border-top: var(--border-width) solid var(--rule);
   }
 }
+
+/* The passkey controls. Hidden in the markup and revealed by script, so the
+   layout must not reserve space for something that may never appear. */
+.passkey-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-s);
+
+  & [hidden] {
+    display: none;
+  }
+
+  & .notice {
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  & .field-hint {
+    flex-basis: 100%;
+  }
+}

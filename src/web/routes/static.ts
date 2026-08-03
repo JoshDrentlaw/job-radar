@@ -15,6 +15,9 @@ const STATIC_DIR = "./static";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
+  // One script, and only one: the passkey ceremonies, which cannot be done
+  // without client JS. Everything else on the site is server-rendered (§3).
+  ".js": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".woff2": "font/woff2",

@@ -19,6 +19,7 @@ export interface LayoutProps {
     | "dossier"
     | "applications"
     | "automation"
+    | "account"
     | "tuning"
     | "coverage";
   readonly csrfToken?: string;
@@ -35,6 +36,7 @@ const NAV = [
   { key: "applications", href: "/applications", label: "Applications" },
   { key: "coverage", href: "/coverage", label: "Coverage" },
   { key: "automation", href: "/automation", label: "Automation" },
+  { key: "account", href: "/account", label: "Account" },
 ] as const;
 
 export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => (

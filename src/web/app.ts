@@ -26,6 +26,7 @@ import { tailoringRoutes } from "./routes/tailoring.tsx";
 import { letterRoutes } from "./routes/letters.tsx";
 import { applicationRoutes } from "./routes/applications.tsx";
 import { tokenRoutes } from "./routes/tokens.tsx";
+import { accountRoutes } from "./routes/account.tsx";
 import { apiRoutes, bearerAuth } from "./routes/api.ts";
 import { coverageRoutes } from "./routes/coverage.tsx";
 import { staticRoutes } from "./routes/static.ts";
@@ -131,6 +132,7 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.route("/", letterRoutes);
   app.route("/", applicationRoutes);
   app.route("/", tokenRoutes);
+  app.route("/", accountRoutes);
   app.route("/", coverageRoutes);
 
   app.notFound((c) => c.text("Not found.", 404));
