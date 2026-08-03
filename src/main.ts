@@ -21,6 +21,8 @@ import { PostgresFacetRepo } from "@adapters/db/facet-repo.ts";
 import { PostgresChunkRepo } from "@adapters/db/chunk-repo.ts";
 import { PostgresMatchRepo } from "@adapters/db/match-repo.ts";
 import { PostgresSettingsRepo } from "@adapters/db/settings-repo.ts";
+import { PostgresFactRepo } from "@adapters/db/fact-repo.ts";
+import { PostgresVariantRepo } from "@adapters/db/variant-repo.ts";
 import { VoyageEmbedder } from "@adapters/embedding/voyage.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
 import { GreenhouseSource } from "@adapters/ats/greenhouse.ts";
@@ -80,6 +82,8 @@ const services: Services = {
   matches: new PostgresMatchRepo(sql),
   settings: new PostgresSettingsRepo(sql),
   embedder,
+  facts: new PostgresFactRepo(sql),
+  variants: new PostgresVariantRepo(sql),
   clock: systemClock,
   logger,
 };

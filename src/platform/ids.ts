@@ -15,6 +15,8 @@ export type SnapshotId = Brand<string, "SnapshotId">;
 export type UserId = Brand<string, "UserId">;
 export type SessionId = Brand<string, "SessionId">;
 export type FacetId = Brand<string, "FacetId">;
+export type FactId = Brand<string, "FactId">;
+export type VariantId = Brand<string, "VariantId">;
 
 export const PLATFORMS = [
   "greenhouse",
@@ -115,4 +117,26 @@ export function asFacetId(value: string): FacetId {
     throw new IdError(`Malformed FacetId: ${JSON.stringify(value)}`);
   }
   return value.toLowerCase() as FacetId;
+}
+
+export function newFactId(): FactId {
+  return crypto.randomUUID() as FactId;
+}
+
+export function asFactId(value: string): FactId {
+  if (!UUID_PATTERN.test(value)) {
+    throw new IdError(`Malformed FactId: ${JSON.stringify(value)}`);
+  }
+  return value.toLowerCase() as FactId;
+}
+
+export function newVariantId(): VariantId {
+  return crypto.randomUUID() as VariantId;
+}
+
+export function asVariantId(value: string): VariantId {
+  if (!UUID_PATTERN.test(value)) {
+    throw new IdError(`Malformed VariantId: ${JSON.stringify(value)}`);
+  }
+  return value.toLowerCase() as VariantId;
 }

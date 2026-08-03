@@ -14,7 +14,7 @@ is deliberately not here yet.
 | **M1 — Boards**        | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
 | **M2 — More adapters** | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
 | **M3 — Matching**      | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
-| M4 — Dossier           | Not started                                                                                   |
+| **M4 — Dossier**       | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
 | M5 — Tailoring         | Not started                                                                                   |
 | M6 — Pipeline + n8n    | Not started                                                                                   |
 | M7 — Polish            | Not started                                                                                   |
@@ -175,6 +175,28 @@ ordered by recency, deliberately not by score: nothing implies "apply to this on
 **Gaps**: each posting chunk carries its best score against the whole active profile. The match
 detail page quotes chunks whose best support falls in the weak bucket — passages with no strong
 counterpart anywhere in the profile — labelled as possibly missing skills _or_ missing vocabulary.
+
+### The dossier (M4)
+
+**The resume is structured data** (§8): a fact set of canonical, true statements (summary lines,
+roles, bullets, skills, education, projects), edited on `/dossier`. Facts are **retired, not
+deleted** — deleting a fact any variant cites fails loudly (FK RESTRICT) and the UI steers to
+retirement, which removes it from pickers while every existing variant still resolves it.
+
+**A variant is a diff against the fact set**: which facts appear, in what order, with what per-fact
+rewording. In M4 every rewrite is typed by the user, shown beside the canonical text it replaces —
+M5's tailoring will propose into this same shape, and nothing enters a variant unreviewed. Freezing
+is one-way; a frozen variant rejects every mutation with an error, not a silent no-op, and
+"duplicate" is the path forward. `target_posting_id` is a plain reference, not a foreign key — a
+board removal cascades its postings and must never destroy or block a variant.
+
+**Rendering is deterministic by construction** (§15): the PDF writer is a hand-rolled, dependency-
+free PDF 1.4 emitter (core Helvetica fonts, real AFM widths for wrapping, no CreationDate, no
+document ID) and the DOCX writer builds minimal WordprocessingML over a store-only zip with a fixed
+timestamp. Both consume the same `RenderableResume` IR assembled by a pure domain function — the
+renderer never sees the database. Tests assert the same variant renders byte-identically twice;
+output was additionally validated with independent parsers (zip CRC + XML well-formedness, and an
+xref-offset audit of the PDF).
 
 ## Open questions from the brief
 

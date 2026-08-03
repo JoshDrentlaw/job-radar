@@ -16,6 +16,7 @@ export interface LayoutProps {
     | "postings"
     | "matches"
     | "profile"
+    | "dossier"
     | "tuning"
     | "coverage";
   readonly csrfToken?: string;
@@ -27,6 +28,7 @@ const NAV = [
   { key: "postings", href: "/postings", label: "Postings" },
   { key: "matches", href: "/matches", label: "Matches" },
   { key: "profile", href: "/profile", label: "Profile" },
+  { key: "dossier", href: "/dossier", label: "Dossier" },
   { key: "tuning", href: "/tuning", label: "Tuning" },
   { key: "coverage", href: "/coverage", label: "Coverage" },
 ] as const;

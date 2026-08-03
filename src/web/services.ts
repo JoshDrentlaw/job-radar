@@ -23,6 +23,7 @@ import type {
   SettingsRepo,
 } from "@domain/discovery/matching.ts";
 import type { CollectionRunRepo } from "@domain/discovery/coverage.ts";
+import type { FactRepo, VariantRepo } from "@domain/dossier/types.ts";
 import type { SessionService } from "@auth/session.ts";
 import type { LoginRateLimiter } from "@auth/rate-limit.ts";
 import type { UserRepo } from "@auth/types.ts";
@@ -42,6 +43,8 @@ export interface Services {
   readonly settings: SettingsRepo;
   /** Null when no embedding API key is configured; match views say so. */
   readonly embedder: Embedder | null;
+  readonly facts: FactRepo;
+  readonly variants: VariantRepo;
   readonly clock: Clock;
   readonly logger: Logger;
 }
