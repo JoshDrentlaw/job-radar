@@ -44,6 +44,13 @@ deno task start               # http://127.0.0.1:8000
 `deno task dev` for watch mode. `deno task check` runs typecheck, lint and format check.
 `deno task test:unit` runs the parser and domain tests; no database needed.
 
+**Deploying to a droplet:** [`docs/deploy.md`](docs/deploy.md).
+
+CI runs the same `check` and `test:unit` on every push, plus one thing that cannot be checked
+without a database: that all nine migrations apply to an empty Postgres 16 with pgvector, and that
+applying them twice is a no-op. `deno install --frozen` gates the lockfile, so a dependency that is
+merely _believed_ pinned fails the build.
+
 Passkeys need a secure context, which means HTTPS in production or `localhost` in development. The
 account page says so plainly when the configured base URL is neither.
 

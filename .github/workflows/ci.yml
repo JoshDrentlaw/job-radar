@@ -1,0 +1,113 @@
+# The same two commands that gate every commit locally, plus the one thing that
+# cannot be checked without a database: that the migrations actually apply.
+#
+# Nothing here reaches a live board, an embedding API or Anthropic — §15 says
+# tests never hit the network, and this workflow does not relax that.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned, like every other dependency in this project. Bumping it is a
+  # deliberate commit, not something that happens to you on a Tuesday.
+  DENO_VERSION: "2.9.4"
+
+jobs:
+  check:
+    name: Typecheck, lint, format, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/deno
+          key: deno-${{ env.DENO_VERSION }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ env.DENO_VERSION }}-
+
+      # --frozen fails if deno.lock does not match what the code actually
+      # imports, which is the difference between a pinned dependency and a
+      # dependency you believe is pinned.
+      - name: Install dependencies from the lockfile
+        run: deno install --frozen
+
+      - name: Check
+        run: deno task check
+
+      - name: Unit tests
+        run: deno task test:unit
+
+  migrations:
+    name: Migrations apply from scratch
+    runs-on: ubuntu-latest
+
+    # pgvector rather than plain postgres: migration 0004 creates the extension,
+    # and a stock postgres image fails there — which is exactly the kind of
+    # thing worth finding here rather than on the droplet.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: jobradar
+          POSTGRES_PASSWORD: jobradar
+          POSTGRES_DB: jobradar_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U jobradar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://jobradar:jobradar@127.0.0.1:5432/jobradar_ci
+      APP_ENV: development
+      APP_BASE_URL: http://127.0.0.1:8000
+      CONTACT_URL: https://github.com/JoshDrentlaw/job-radar
+      LOG_LEVEL: info
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/deno
+          key: deno-${{ env.DENO_VERSION }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ env.DENO_VERSION }}-
+
+      - name: Apply every migration to an empty database
+        run: deno task migrate up
+
+      - name: Report what was applied
+        run: deno task migrate status
+
+      # Applying twice must be a no-op. If it is not, the runner is not
+      # idempotent and a restarted deploy would double-apply something.
+      - name: Applying again changes nothing
+        run: |
+          deno task migrate up
+          if deno task migrate status | grep -q pending; then
+            echo "::error::A migration is still pending after a second 'up'."
+            exit 1
+          fi
