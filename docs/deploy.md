@@ -240,14 +240,16 @@ cd /opt/job-radar
 set -a; . /etc/job-radar.env; set +a
 
 sudo -u jobradar env \
-  DATABASE_URL="$DATABASE_URL" APP_ENV="$APP_ENV" APP_BASE_URL="$APP_BASE_URL" \
-  CONTACT_URL="$CONTACT_URL" DENO_DIR=/opt/job-radar/.deno \
+  DATABASE_URL="$DATABASE_URL" APP_ENV="$APP_ENV" LOG_LEVEL="$LOG_LEVEL" \
+  DENO_DIR=/opt/job-radar/.deno \
   ADMIN_USERNAME=you ADMIN_PASSWORD='at least twelve characters' \
   /usr/local/bin/deno task seed-admin
 ```
 
 (Passing each variable explicitly rather than piping the env file through `xargs`, which mangles any
-value containing a space — and a good database password may well contain one.)
+value containing a space — and a good database password may well contain one. Only three are needed:
+the task's `--allow-env` list grants nothing else, deliberately, so a tool that creates an account
+cannot read your API keys.)
 
 There is no registration route — not disabled, absent. This task is the only way an account comes
 into existence, and passing the password inline keeps it out of `/etc/job-radar.env` where it has no
