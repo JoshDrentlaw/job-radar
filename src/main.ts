@@ -19,6 +19,8 @@ import { PostgresSessionRepo } from "@adapters/db/session-repo.ts";
 import { PostgresLoginAttemptRepo } from "@adapters/db/login-attempt-repo.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
 import { GreenhouseSource } from "@adapters/ats/greenhouse.ts";
+import { LeverSource } from "@adapters/ats/lever.ts";
+import { AshbySource } from "@adapters/ats/ashby.ts";
 
 import { SessionService } from "@auth/session.ts";
 import { LoginRateLimiter } from "@auth/rate-limit.ts";
@@ -44,6 +46,8 @@ const http = new PoliteFetcher({ userAgent: buildUserAgent(config.contactUrl) })
  */
 const sources = new Map<Platform, BoardSource>([
   ["greenhouse", new GreenhouseSource(http, () => systemClock.now())],
+  ["lever", new LeverSource(http, () => systemClock.now())],
+  ["ashby", new AshbySource(http, () => systemClock.now())],
 ]);
 
 const users = new PostgresUserRepo(sql);

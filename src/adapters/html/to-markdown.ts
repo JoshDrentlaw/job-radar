@@ -121,8 +121,25 @@ function block(content: string): string {
   return trimmed === "" ? "" : `\n\n${trimmed}\n\n`;
 }
 
+/**
+ * Collect a list's items, flattening through wrapper elements. Lever's list
+ * fragments arrive as `<div>\n<li>…</li></div>` runs (observed live), and an
+ * HTML parser keeps that div as a child of the list — filtering for direct
+ * `<li>` children only would silently drop every item inside it. Nested lists
+ * are not descended into; they render inside their own item.
+ */
+function listItemsOf(node: Node): Node[] {
+  const items: Node[] = [];
+  for (const child of Array.from(node.childNodes)) {
+    const tag = tagOf(child);
+    if (tag === "LI") items.push(child);
+    else if (isElement(child) && tag !== "UL" && tag !== "OL") items.push(...listItemsOf(child));
+  }
+  return items;
+}
+
 function renderList(node: Element, ctx: Context, ordered: boolean): string {
-  const items = Array.from(node.childNodes).filter((child) => tagOf(child) === "LI");
+  const items = listItemsOf(node);
   const indent = "  ".repeat(ctx.listDepth);
   const childCtx: Context = { ...ctx, listDepth: ctx.listDepth + 1, orderedIndex: null };
 

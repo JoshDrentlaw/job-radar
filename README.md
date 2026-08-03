@@ -8,16 +8,16 @@ is deliberately not here yet.
 
 ## Status
 
-| Milestone                         | State                                                                                               |
-| --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **M0 — Skeleton**                 | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.               |
-| **M1 — Boards**                   | Done except tests. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger. |
-| M2 — More adapters (Lever, Ashby) | Not started                                                                                         |
-| M3 — Profile + matching           | Not started                                                                                         |
-| M4 — Dossier                      | Not started                                                                                         |
-| M5 — Tailoring                    | Not started                                                                                         |
-| M6 — Pipeline + n8n               | Not started                                                                                         |
-| M7 — Polish                       | Not started                                                                                         |
+| Milestone               | State                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| **M0 — Skeleton**       | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
+| **M1 — Boards**         | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
+| **M2 — More adapters**  | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
+| M3 — Profile + matching | Not started                                                                                   |
+| M4 — Dossier            | Not started                                                                                   |
+| M5 — Tailoring          | Not started                                                                                   |
+| M6 — Pipeline + n8n     | Not started                                                                                   |
+| M7 — Polish             | Not started                                                                                   |
 
 ## Stack
 
@@ -42,13 +42,15 @@ deno task start               # http://127.0.0.1:8000
 ```
 
 `deno task dev` for watch mode. `deno task check` runs typecheck, lint and format check.
+`deno task test:unit` runs the parser and domain tests; no database needed.
 
 ### Permissions
 
 Every task declares an explicit allowlist — no blanket `-A`. The app runs with network access
-limited to Postgres, its own listen port, and `boards-api.greenhouse.io`. **Adding an adapter in M2
-means adding its host to the `dev` and `start` tasks**, and until you do, the adapter will fail
-loudly rather than succeed quietly. That is the intended behaviour.
+limited to Postgres, its own listen port, and the three implemented feed hosts
+(`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). **Adding an adapter means adding
+its host to the `dev` and `start` tasks**, and until you do, the adapter will fail loudly rather
+than succeed quietly. That is the intended behaviour.
 
 `PG*` appears in the env allowlist because postgres.js probes those variables for connection
 defaults during option parsing. Deno supports prefix wildcards; everything outside the listed names
@@ -67,6 +69,9 @@ src/
   platform/          config, logging, db, migrations, ids, hashing, clock
   web/               Hono app, routes, JSX
 static/app.css       the entire stylesheet
+test/
+  unit/              parser and domain tests, no database required
+  fixtures/          live feed payloads, trimmed at tag boundaries — real shapes, not invented ones
 ```
 
 The three bounded contexts get separate Postgres schema namespaces: `discovery`, `dossier`,
@@ -100,19 +105,49 @@ continues.
 **No inline styles anywhere**, not just no inline scripts. The CSP sets `style-src 'self'`, so
 one-off spacing nudges are named classes instead.
 
-### The Greenhouse adapter was written against live data
+### Every adapter was written against live data
 
-Three live boards (Vercel, Anthropic, Figma — 657 postings) were fetched and surveyed before a line
+**Greenhouse** — three live boards (Vercel, Anthropic, Figma — 657 postings) surveyed before a line
 of parser was written. That established: no pagination even at 400 postings; `content` is
 entity-encoded HTML on every posting using exactly the five basic XML entities; `first_published` is
 the real publication date; Greenhouse publishes **no** compensation field at all; and the key set
 varies slightly between boards. The parser is strict about the fields it uses and tolerant of
 everything else.
 
+**Lever** (M2) — two live boards (Spotify, Veeva — 890 postings) plus one live empty board. The
+response is a bare JSON array; `[]` is a valid empty board, not an error. The description is split
+across three HTML fields (`description`, `lists[]`, `additional`) and all three are reassembled in
+the order Lever's own hosted page renders them — the requirements live almost entirely in `lists`.
+`workplaceType` is a source-asserted modality on every posting. `salaryRange` appeared on zero of
+890 postings, so no parser was written for it — a parser for a shape never observed live would
+violate the verify-first rule.
+
+**Ashby** (M2) — four live boards (Linear, Ramp, OpenAI, Modal — 931 postings). Best compensation
+coverage of any feed, exactly as the brief predicted. Both documented nesting locations are read
+(`summaryComponents` first, `compensationTiers[].components` as fallback), only the Salary component
+becomes the structured range, and the source's own `compensationTierSummary` wording is kept
+verbatim. `currencyCode` was _absent_ (not null) on 64 components; absent means unstated, not USD.
+
+Parsing the full live payloads end to end — 1,902 postings across all eight boards — produced zero
+failures, zero empty descriptions, and a unique content hash per posting.
+
 The HTML→markdown converter covers the measured tag vocabulary —
 `li, p, strong, div, h2, ul,
-span, a, br, u, h4, h3, em, h1, ol, hr` — plus a conservative tail for
-adapters still to come.
+span, a, br, u, h4, h3, em, h1, ol, hr` — plus a conservative tail. M2
+taught it one lesson the hard way: Lever wraps `<li>` runs in a `<div>` inside the list, which the
+original converter silently dropped. List items are now collected through wrapper elements, and the
+Greenhouse adapter version was bumped to `greenhouse/2` because shared-converter changes can alter
+its output too.
+
+### M2's domain-model adjustment
+
+The brief predicted M2 would put real pressure on the normalization abstraction. It did, once: Lever
+and Ashby both **assert** workplace modality (`workplaceType`) as a source field, while the model
+only had the _derived_ `remoteHint` guess. An assertion is not a guess, so postings gained a
+source-asserted `workplace_raw` column (verbatim, no CHECK constraint — the source's vocabulary is
+not ours to constrain), and the derivation now defers to a recognized assertion rather than
+inferring against it (`location/2`). The UI shows the asserted value where one exists and the
+derived chip only where the source said nothing.
 
 ## Open questions from the brief
 
@@ -126,13 +161,13 @@ Flagged rather than guessed.
    explicit "include postings no longer listed" toggle, and labelled when shown. That is a
    placeholder for a real decision, not the decision.
 
-3. **Whether `remoteHint` derivation earns its place** — there is now evidence. The derivation is
-   deliberately reluctant: it asserts a modality only when the string states one, and a bare city
-   name yields `unknown` rather than `onsite`, because a fully remote company listing a hub city is
-   indistinguishable from an in-office role at this layer. On Vercel's board, which uses explicit
-   `Hybrid - …` prefixes, it is confident and useful (70 hybrid, 11 remote). On Anthropic's and
-   Figma's boards, which are mostly bare city names, it would return `unknown` for most postings. So
-   it earns its place on some boards and not others. Worth a decision.
+3. **Whether `remoteHint` derivation earns its place** — largely settled by M2. Lever and Ashby
+   assert the modality outright, so on those platforms the derivation simply echoes a fact and the
+   string-inference never runs. It still earns its place on Greenhouse, where boards like Vercel
+   encode modality in the location string (70 hybrid, 11 remote out of 81) — and still returns
+   `unknown` for bare city names, because a fully remote company listing a hub city is
+   indistinguishable from an in-office role at this layer. What remains open is only whether
+   `unknown` should render at all in list views.
 
 4. **Whether the fact set needs a separate narrative layer** — untouched; M4/M5 territory.
 

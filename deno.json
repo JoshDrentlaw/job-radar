@@ -4,8 +4,8 @@
   "exports": "./src/main.ts",
 
   "tasks": {
-    "dev": "deno run --watch --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG* --allow-read=./migrations,./static src/main.ts",
-    "start": "deno run --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG* --allow-read=./migrations,./static src/main.ts",
+    "dev": "deno run --watch --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443,api.lever.co:443,api.ashbyhq.com:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG* --allow-read=./migrations,./static src/main.ts",
+    "start": "deno run --allow-net=127.0.0.1:5432,127.0.0.1:8000,boards-api.greenhouse.io:443,api.lever.co:443,api.ashbyhq.com:443 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG* --allow-read=./migrations,./static src/main.ts",
     "migrate": "deno run --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG* --allow-read=./migrations src/platform/migrate-cli.ts",
     "seed-admin": "deno run --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,HOST,PORT,APP_ENV,APP_BASE_URL,CONTACT_URL,LOG_LEVEL,PG*,ADMIN_USERNAME,ADMIN_PASSWORD src/tasks/seed-admin.ts",
     "test": "deno test --allow-net=127.0.0.1:5432 --allow-env=DATABASE_URL,TEST_DATABASE_URL,APP_ENV,LOG_LEVEL,PG* --allow-read=./migrations,./test,./static",

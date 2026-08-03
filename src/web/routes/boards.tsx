@@ -17,7 +17,7 @@ import type { Board, Snapshot } from "@domain/discovery/types.ts";
 import { collect } from "@domain/discovery/collect.ts";
 
 /** Platforms with an adapter today. The rest are listed but not selectable. */
-const IMPLEMENTED: ReadonlySet<string> = new Set(["greenhouse"]);
+const IMPLEMENTED: ReadonlySet<string> = new Set(["greenhouse", "lever", "ashby"]);
 
 interface BoardsPageProps {
   readonly boards: readonly Board[];

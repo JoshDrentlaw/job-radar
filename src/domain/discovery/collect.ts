@@ -73,7 +73,7 @@ function toPosting(
     },
     derived: {
       locationNormalized: normalizeLocation(source.locationRaw),
-      remoteHint: deriveRemoteHint(source.locationRaw),
+      remoteHint: deriveRemoteHint(source.locationRaw, source.workplaceRaw),
       derivationVersion: DERIVATION_VERSION,
       derivedAt: now,
     },

@@ -14,6 +14,7 @@ interface PostingRow {
   external_id: string;
   title: string;
   location_raw: string;
+  workplace_raw: string | null;
   employment_type: string | null;
   department: string | null;
   description_text: string;
@@ -47,6 +48,7 @@ function toPosting(row: PostingRow): Posting {
     firstSeenAt: row.first_seen_at,
     lastSeenAt: row.last_seen_at,
     currentlyListed: row.currently_listed,
+    ...(row.workplace_raw !== null ? { workplaceRaw: row.workplace_raw } : {}),
     ...(row.employment_type !== null ? { employmentType: row.employment_type } : {}),
     ...(row.department !== null ? { department: row.department } : {}),
     ...(row.compensation !== null ? { compensation: row.compensation } : {}),
@@ -73,7 +75,7 @@ function toPosting(row: PostingRow): Posting {
  * separation is the schema's, not this query's (§5).
  */
 const SELECT_POSTING = `
-  p.id, p.board_id, p.external_id, p.title, p.location_raw, p.employment_type,
+  p.id, p.board_id, p.external_id, p.title, p.location_raw, p.workplace_raw, p.employment_type,
   p.department, p.description_text, p.compensation, p.apply_url, p.posted_at,
   p.first_seen_at, p.last_seen_at, p.currently_listed,
   p.provenance_platform, p.provenance_adapter_version, p.provenance_source_url,
@@ -149,14 +151,15 @@ export class PostgresPostingRepo implements PostingRepo {
       for (const posting of postings) {
         await tx`
           INSERT INTO discovery.postings (
-            id, board_id, external_id, title, location_raw, employment_type, department,
-            description_text, compensation, apply_url, posted_at,
+            id, board_id, external_id, title, location_raw, workplace_raw, employment_type,
+            department, description_text, compensation, apply_url, posted_at,
             first_seen_at, last_seen_at, currently_listed,
             provenance_platform, provenance_adapter_version, provenance_source_url,
             provenance_fetched_at, provenance_content_hash
           ) VALUES (
             ${posting.id}, ${posting.boardId}, ${posting.externalId}, ${posting.title},
-            ${posting.locationRaw}, ${posting.employmentType ?? null},
+            ${posting.locationRaw}, ${posting.workplaceRaw ?? null},
+            ${posting.employmentType ?? null},
             ${posting.department ?? null}, ${posting.descriptionText},
             ${posting.compensation ? tx.json(posting.compensation as never) : null},
             ${posting.applyUrl}, ${posting.postedAt ?? null},
@@ -168,6 +171,7 @@ export class PostgresPostingRepo implements PostingRepo {
           ON CONFLICT (id) DO UPDATE SET
             title            = EXCLUDED.title,
             location_raw     = EXCLUDED.location_raw,
+            workplace_raw    = EXCLUDED.workplace_raw,
             employment_type  = EXCLUDED.employment_type,
             department       = EXCLUDED.department,
             description_text = EXCLUDED.description_text,
