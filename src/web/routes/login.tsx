@@ -158,7 +158,7 @@ loginRoutes.post("/login", async (c) => {
   await services.rateLimiter.recordSuccess(ip, username);
   await startSession(c, user.id);
 
-  logger.info("login succeeded", { ip, userId: user.id, method: "password" });
+  logger.info("login succeeded", { ip, userId: user.id, via: "password" });
   return c.redirect(next, 303);
 });
 
@@ -245,7 +245,7 @@ loginRoutes.post("/login/passkey", async (c) => {
   logger.info("login succeeded", {
     ip,
     userId: credential.userId,
-    method: "passkey",
+    via: "passkey",
     credentialId: credential.id,
   });
   const next = safeRedirectTarget(
