@@ -17,6 +17,11 @@ import { PostgresCollectionRunRepo } from "@adapters/db/collection-run-repo.ts";
 import { PostgresUserRepo } from "@adapters/db/user-repo.ts";
 import { PostgresSessionRepo } from "@adapters/db/session-repo.ts";
 import { PostgresLoginAttemptRepo } from "@adapters/db/login-attempt-repo.ts";
+import { PostgresFacetRepo } from "@adapters/db/facet-repo.ts";
+import { PostgresChunkRepo } from "@adapters/db/chunk-repo.ts";
+import { PostgresMatchRepo } from "@adapters/db/match-repo.ts";
+import { PostgresSettingsRepo } from "@adapters/db/settings-repo.ts";
+import { VoyageEmbedder } from "@adapters/embedding/voyage.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
 import { GreenhouseSource } from "@adapters/ats/greenhouse.ts";
 import { LeverSource } from "@adapters/ats/lever.ts";
@@ -52,6 +57,15 @@ const sources = new Map<Platform, BoardSource>([
 
 const users = new PostgresUserRepo(sql);
 
+// Matching is inert without an embedding key; the UI says so instead of the
+// process refusing to start — boards and postings work either way.
+const embedder = config.voyageApiKey !== undefined
+  ? new VoyageEmbedder({ apiKey: config.voyageApiKey, model: config.embeddingModel })
+  : null;
+if (embedder === null) {
+  logger.warn("VOYAGE_API_KEY is not set — embedding and matching are disabled");
+}
+
 const services: Services = {
   boards: new PostgresBoardRepo(sql),
   postings: new PostgresPostingRepo(sql),
@@ -61,6 +75,11 @@ const services: Services = {
   sessions: new SessionService(new PostgresSessionRepo(sql), users, systemClock),
   rateLimiter: new LoginRateLimiter(new PostgresLoginAttemptRepo(sql), systemClock),
   sourceFor: (platform) => sources.get(platform) ?? null,
+  facets: new PostgresFacetRepo(sql),
+  chunks: new PostgresChunkRepo(sql),
+  matches: new PostgresMatchRepo(sql),
+  settings: new PostgresSettingsRepo(sql),
+  embedder,
   clock: systemClock,
   logger,
 };

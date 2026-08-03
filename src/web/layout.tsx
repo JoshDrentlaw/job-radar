@@ -10,7 +10,14 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 export interface LayoutProps {
   readonly title: string;
   /** Highlights the matching nav item. */
-  readonly current?: "dashboard" | "boards" | "postings" | "coverage";
+  readonly current?:
+    | "dashboard"
+    | "boards"
+    | "postings"
+    | "matches"
+    | "profile"
+    | "tuning"
+    | "coverage";
   readonly csrfToken?: string;
 }
 
@@ -18,6 +25,9 @@ const NAV = [
   { key: "dashboard", href: "/", label: "Dashboard" },
   { key: "boards", href: "/boards", label: "Boards" },
   { key: "postings", href: "/postings", label: "Postings" },
+  { key: "matches", href: "/matches", label: "Matches" },
+  { key: "profile", href: "/profile", label: "Profile" },
+  { key: "tuning", href: "/tuning", label: "Tuning" },
   { key: "coverage", href: "/coverage", label: "Coverage" },
 ] as const;
 

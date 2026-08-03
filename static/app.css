@@ -753,3 +753,145 @@ button,
   font-size: var(--step--1);
   color: var(--ink-muted);
 }
+
+/* ------------------------------------------------------- M3: matching ----- */
+
+/* The profile editor: long-form markdown wants a writing surface, not a
+   form field. */
+textarea.editor {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  min-height: 16lh;
+  line-height: 1.6;
+  background: var(--bg-raised);
+}
+
+input[type="number"] {
+  width: 100%;
+  font: inherit;
+  font-size: var(--step-0);
+  color: var(--ink);
+  background: var(--bg);
+  border: var(--border-width) solid var(--rule-strong);
+  border-radius: var(--radius-s);
+  padding: var(--space-xs) var(--space-s);
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+}
+
+.danger-text {
+  color: var(--danger);
+}
+
+.filter-row {
+  align-items: center;
+  margin-block-end: var(--space-m);
+
+  & label {
+    margin: 0;
+  }
+
+  & select {
+    width: auto;
+  }
+}
+
+/* Match cards. One per posting; the quote is the reasoning (§7). */
+.match-card {
+  padding-block: var(--space-m);
+
+  & + .match-card {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+.match-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-s);
+}
+
+.match-facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  justify-content: end;
+}
+
+.match-quote {
+  margin: var(--space-s) 0 var(--space-2xs);
+  padding: var(--space-s) var(--space-m);
+  border-inline-start: 3px solid var(--accent);
+  background: var(--bg-sunken);
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  font-size: var(--step--1);
+  line-height: 1.55;
+  color: var(--ink-muted);
+  white-space: pre-line;
+  max-height: 14lh;
+  overflow: hidden;
+
+  &.gap {
+    border-inline-start-color: var(--warn);
+  }
+}
+
+/* The weak bucket collapses; no script needed. */
+.panel details {
+  & summary {
+    cursor: pointer;
+    list-style-position: outside;
+
+    & h2 {
+      display: inline;
+      font-size: var(--step-1);
+    }
+  }
+
+  &[open] summary {
+    margin-block-end: var(--space-s);
+  }
+}
+
+/* Tuning histogram: server-rendered bars, the one place raw floats live. */
+.histogram {
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  height: 11rem;
+  padding: var(--space-s);
+  background: var(--bg-sunken);
+  border-radius: var(--radius-s);
+}
+
+.histogram-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: end;
+}
+
+.histogram-fill {
+  width: 100%;
+  min-height: 1px;
+  border-radius: 2px 2px 0 0;
+  background: var(--rule-strong);
+}
+
+.histogram-bar.strong .histogram-fill {
+  background: var(--ok);
+}
+
+.histogram-bar.plausible .histogram-fill {
+  background: var(--warn);
+}
+
+.histogram-bar.weak .histogram-fill {
+  background: var(--rule-strong);
+}

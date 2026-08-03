@@ -15,6 +15,13 @@ import type {
   PostingRepo,
   SnapshotRepo,
 } from "@domain/discovery/types.ts";
+import type {
+  ChunkRepo,
+  Embedder,
+  FacetRepo,
+  MatchRepo,
+  SettingsRepo,
+} from "@domain/discovery/matching.ts";
 import type { CollectionRunRepo } from "@domain/discovery/coverage.ts";
 import type { SessionService } from "@auth/session.ts";
 import type { LoginRateLimiter } from "@auth/rate-limit.ts";
@@ -29,6 +36,12 @@ export interface Services {
   readonly sessions: SessionService;
   readonly rateLimiter: LoginRateLimiter;
   readonly sourceFor: (platform: Platform) => BoardSource | null;
+  readonly facets: FacetRepo;
+  readonly chunks: ChunkRepo;
+  readonly matches: MatchRepo;
+  readonly settings: SettingsRepo;
+  /** Null when no embedding API key is configured; match views say so. */
+  readonly embedder: Embedder | null;
   readonly clock: Clock;
   readonly logger: Logger;
 }

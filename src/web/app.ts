@@ -17,6 +17,9 @@ import { loginRoutes } from "./routes/login.tsx";
 import { dashboardRoutes } from "./routes/dashboard.tsx";
 import { boardRoutes } from "./routes/boards.tsx";
 import { postingRoutes } from "./routes/postings.tsx";
+import { profileRoutes } from "./routes/profile.tsx";
+import { matchRoutes } from "./routes/matches.tsx";
+import { tuningRoutes } from "./routes/tuning.tsx";
 import { coverageRoutes } from "./routes/coverage.tsx";
 import { staticRoutes } from "./routes/static.ts";
 
@@ -102,6 +105,9 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.route("/", dashboardRoutes);
   app.route("/", boardRoutes);
   app.route("/", postingRoutes);
+  app.route("/", profileRoutes);
+  app.route("/", matchRoutes);
+  app.route("/", tuningRoutes);
   app.route("/", coverageRoutes);
 
   app.notFound((c) => c.text("Not found.", 404));

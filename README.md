@@ -8,16 +8,16 @@ is deliberately not here yet.
 
 ## Status
 
-| Milestone               | State                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| **M0 — Skeleton**       | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
-| **M1 — Boards**         | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
-| **M2 — More adapters**  | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
-| M3 — Profile + matching | Not started                                                                                   |
-| M4 — Dossier            | Not started                                                                                   |
-| M5 — Tailoring          | Not started                                                                                   |
-| M6 — Pipeline + n8n     | Not started                                                                                   |
-| M7 — Polish             | Not started                                                                                   |
+| Milestone              | State                                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| **M0 — Skeleton**      | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
+| **M1 — Boards**        | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
+| **M2 — More adapters** | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
+| **M3 — Matching**      | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
+| M4 — Dossier           | Not started                                                                                   |
+| M5 — Tailoring         | Not started                                                                                   |
+| M6 — Pipeline + n8n    | Not started                                                                                   |
+| M7 — Polish            | Not started                                                                                   |
 
 ## Stack
 
@@ -47,10 +47,11 @@ deno task start               # http://127.0.0.1:8000
 ### Permissions
 
 Every task declares an explicit allowlist — no blanket `-A`. The app runs with network access
-limited to Postgres, its own listen port, and the three implemented feed hosts
-(`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`). **Adding an adapter means adding
-its host to the `dev` and `start` tasks**, and until you do, the adapter will fail loudly rather
-than succeed quietly. That is the intended behaviour.
+limited to Postgres, its own listen port, the three implemented feed hosts
+(`boards-api.greenhouse.io`, `api.lever.co`, `api.ashbyhq.com`), and the embedding API
+(`api.voyageai.com`). **Adding an adapter means adding its host to the `dev` and `start` tasks**,
+and until you do, the adapter will fail loudly rather than succeed quietly. That is the intended
+behaviour.
 
 `PG*` appears in the env allowlist because postgres.js probes those variables for connection
 defaults during option parsing. Deno supports prefix wildcards; everything outside the listed names
@@ -149,13 +150,39 @@ not ours to constrain), and the derivation now defers to a recognized assertion 
 inferring against it (`location/2`). The UI shows the asserted value where one exists and the
 derived chip only where the source said nothing.
 
+### How matching works (M3)
+
+**Profile facets** are long-form markdown, authored on `/profile`, each a different angle on the
+same experience (`backend`, `data-pipeline`, …). Facets and posting descriptions are both split into
+overlapping, paragraph-aligned chunks (`chunk.ts`) and embedded via Voyage AI — postings as
+`document`, facets as `query`. Chunk text is stored verbatim so every match can quote the exact
+passage that matched; the embedded input for a posting chunk is prefixed with the title, but the
+stored quote is untouched.
+
+**Embedding is gated** (§7): a posting is embedded only when no vectors exist for its current
+content hash under the current model, so an unchanged posting is never re-billed. The model name is
+recorded on every vector and every consumer filters by it — changing `EMBEDDING_MODEL` is the
+explicit act that re-embeds and rescores everything. Without `VOYAGE_API_KEY` the app runs fine; the
+match pages state what is missing instead of erroring.
+
+**A match** is one row per (posting, facet): the best chunk pair's raw cosine similarity plus which
+chunks produced it. Raw floats are stored, but the UI shows only `strong` / `plausible` / `weak`
+buckets, computed at read time from thresholds in `app.settings`. `/tuning` is the one place floats
+appear: the full score distribution as a histogram, a CSV export, and the threshold form — set the
+cut where the data separates, then every view re-buckets instantly. Within a bucket, matches are
+ordered by recency, deliberately not by score: nothing implies "apply to this one".
+
+**Gaps**: each posting chunk carries its best score against the whole active profile. The match
+detail page quotes chunks whose best support falls in the weak bucket — passages with no strong
+counterpart anywhere in the profile — labelled as possibly missing skills _or_ missing vocabulary.
+
 ## Open questions from the brief
 
 Flagged rather than guessed.
 
-1. **Embedding provider** — unresolved, and it affects chunk sizing and the cost model. Nothing in
-   M0/M1 depends on it. pgvector is installed and working, but the vector migration is deliberately
-   deferred to M3 rather than committing to a dimension count now.
+1. **Embedding provider** — resolved in M3: Voyage AI (`voyage-3.5` by default), Anthropic's
+   recommended embeddings partner. The `Embedder` port keeps it swappable; the vector columns are
+   dimension-less so a model change is a re-embed, not a schema migration.
 
 2. **Whether disappeared postings surface at all** — currently they are hidden by default with an
    explicit "include postings no longer listed" toggle, and labelled when shown. That is a

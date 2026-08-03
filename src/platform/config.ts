@@ -17,6 +17,16 @@ export interface Config {
   /** Advertised in the outbound User-Agent so board owners can reach a human (§15). */
   readonly contactUrl: string;
   readonly databaseUrl: string;
+  /**
+   * Absent when embeddings are not configured; the matching pages say so
+   * rather than failing. Set VOYAGE_API_KEY to enable.
+   */
+  readonly voyageApiKey?: string;
+  /**
+   * Recorded with every vector (§7). Changing it is the explicit act that
+   * re-embeds the corpus and rescores everything — never change it casually.
+   */
+  readonly embeddingModel: string;
   readonly logLevel: LogLevel;
   /**
    * Whether to set `Secure` on the session cookie. Always true in production;
@@ -95,6 +105,8 @@ export function loadConfig(source: EnvSource = denoEnv): Config {
     "https://github.com/JoshDrentlaw/job-radar",
   );
 
+  const voyageApiKey = source("VOYAGE_API_KEY")?.trim() ?? "";
+
   return {
     env: rawEnv,
     host: optional(source, "HOST", "127.0.0.1"),
@@ -102,6 +114,8 @@ export function loadConfig(source: EnvSource = denoEnv): Config {
     baseUrl: parsedBase.origin,
     contactUrl,
     databaseUrl,
+    ...(voyageApiKey !== "" ? { voyageApiKey } : {}),
+    embeddingModel: optional(source, "EMBEDDING_MODEL", "voyage-3.5"),
     logLevel: rawLogLevel as LogLevel,
     secureCookies: rawEnv === "production",
   };
