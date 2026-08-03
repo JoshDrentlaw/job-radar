@@ -8,16 +8,16 @@ is deliberately not here yet.
 
 ## Status
 
-| Milestone              | State                                                                                         |
-| ---------------------- | --------------------------------------------------------------------------------------------- |
-| **M0 — Skeleton**      | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
-| **M1 — Boards**        | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
-| **M2 — More adapters** | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
-| **M3 — Matching**      | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
-| **M4 — Dossier**       | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
-| **M5 — Tailoring**     | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
-| M6 — Pipeline + n8n    | Not started                                                                                   |
-| M7 — Polish            | Not started                                                                                   |
+| Milestone               | State                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| **M0 — Skeleton**       | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
+| **M1 — Boards**         | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
+| **M2 — More adapters**  | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
+| **M3 — Matching**       | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
+| **M4 — Dossier**        | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
+| **M5 — Tailoring**      | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
+| **M6 — Pipeline + n8n** | Done. Applications with an append-only timeline, bearer-authenticated job routes, ghosting.   |
+| M7 — Polish             | Not started                                                                                   |
 
 ## Stack
 
@@ -64,10 +64,15 @@ declare the same scoped list rather than a blanket `--allow-env`.
 ```
 migrations/          numbered plain SQL, up + down, checksum-verified
 src/
-  domain/discovery/  pure domain — no HTTP, no SQL, no vendor names
+  domain/            pure domain per context — no HTTP, no SQL, no vendor names
+    discovery/         boards, snapshots, matching, coverage
+    dossier/           facts, variants, resume assembly, tailoring, drift
+    pipeline/          applications, the status vocabulary, the ghosting rule
   adapters/ats/      board sources + the polite fetcher
   adapters/db/       one repository per aggregate
   adapters/html/     HTML → markdown
+  adapters/llm/      Anthropic client behind the LlmClient port
+  adapters/render/   deterministic PDF and DOCX writers
   auth/              argon2id, sessions, CSRF, rate limiting, default-deny
   platform/          config, logging, db, migrations, ids, hashing, clock
   web/               Hono app, routes, JSX
@@ -78,8 +83,8 @@ test/
 ```
 
 The three bounded contexts get separate Postgres schema namespaces: `discovery`, `dossier`,
-`pipeline`, plus `app` for auth. `dossier` and `pipeline` exist and are empty — they arrive in M4
-and M6.
+`pipeline`, plus `app` for auth. References across a context seam are plain ids, never foreign keys:
+an application must outlive the posting it was sent to.
 
 ## Decisions worth knowing about
 
@@ -237,6 +242,47 @@ posting.
 
 Without `ANTHROPIC_API_KEY` the app runs fine and the dossier pages say what is unavailable — the
 fact set and variants work by hand, which is how M4 proved the data model.
+
+### Pipeline and the n8n boundary (M6)
+
+**The app owns the work; n8n owns the schedule and the delivery.** Five routes under `/api/jobs/` do
+the work — `collect`, `embed`, `match`, `sweep`, and a read-only `digest` — and none of them knows
+what a notification is. Everything they need to decide anything is in the JSON they return.
+
+**The status code is the contract.** 200 clean, **207 partial**, 500 the run itself failed, so n8n
+branches on the response rather than parsing prose. A collection run where one board 503s is a 207
+that _names the board_, because "1 board failed" is not something you can act on; a run where every
+board failed is a 500, because nothing partially worked. An embed run with a backlog remaining is
+also a 207 — call again rather than waiting a full cycle. Unit tests drive the real app through each
+of these.
+
+**The job routes authenticate with a bearer token, not the session cookie**, and are mounted
+_before_ the session middleware, so a session cookie grants nothing there and a bearer token grants
+nothing anywhere else. Both directions are tested. CSRF does not apply and is not needed: it exists
+because browsers attach cookies automatically, and nothing under `/api` reads one. §11 says secrets
+live in the environment and never the database, and also that this token is rotatable from the UI;
+both hold, because only a SHA-256 of the token is stored — exactly as sessions store a hash of the
+cookie. The plaintext is shown once, at creation, and never again. Minting the replacement before
+revoking the old one leaves no gap.
+
+**`ghosted` is an honest name for a stale row, not an inference about the employer.** The sweep
+marks an application ghosted after a configurable window of silence, records the transition as
+`source: 'rule'` on the timeline, and — deliberately — does not touch `last_activity_at`, so the
+sweep never resets the clock it reads. A rule-set status reads differently from an observation when
+you come back to the timeline, and the UI keeps `ghosted` out of the manual status form for the same
+reason.
+
+**The timeline is append-only.** Events are never updated or deleted; a correction is another row.
+The application itself denormalizes the posting title, company and apply URL at creation, so the
+record still reads correctly after the listing is gone.
+
+**Coverage got a per-board run detail view.** The run row said "9 of 11 boards, 240 postings"; the
+detail says which two boards are missing from that number, why, and which board the new postings
+actually came from. Failures sort first. The breakdown is written in the same transaction as the
+totals — a total whose denominator was lost is the artifact §10 exists to prevent.
+
+**Applying is still a deliberate human act.** The application detail page is a set of
+clipboard-ready fields and links; nothing posts anything anywhere.
 
 ## Open questions from the brief
 

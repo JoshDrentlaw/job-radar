@@ -244,8 +244,15 @@ const MatchDetailPage: FC<{
           <a class="button quiet" href={`/postings/${encodeURIComponent(props.posting.id)}`}>
             Full posting
           </a>
-          <a class="button primary" href={props.posting.applyUrl} rel="noreferrer noopener">
-            Apply page
+          <a class="button quiet" href={props.posting.applyUrl} rel="noreferrer noopener">
+            Apply page ↗
+          </a>
+          {/* One click from a match to a pre-populated draft (§9). */}
+          <a
+            class="button primary"
+            href={`/applications/new?posting=${encodeURIComponent(props.posting.id)}`}
+          >
+            Track an application
           </a>
         </div>
       </div>

@@ -24,6 +24,9 @@ import { dossierRoutes } from "./routes/dossier.tsx";
 import { variantRoutes } from "./routes/variants.tsx";
 import { tailoringRoutes } from "./routes/tailoring.tsx";
 import { letterRoutes } from "./routes/letters.tsx";
+import { applicationRoutes } from "./routes/applications.tsx";
+import { tokenRoutes } from "./routes/tokens.tsx";
+import { apiRoutes, bearerAuth } from "./routes/api.ts";
 import { coverageRoutes } from "./routes/coverage.tsx";
 import { staticRoutes } from "./routes/static.ts";
 
@@ -95,6 +98,16 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   // Health check is public and deliberately says nothing about internals.
   app.get("/healthz", (c) => c.json({ status: "ok" }));
 
+  // The n8n job routes carry their own bearer auth and are mounted ahead of
+  // the session middleware (§11, §12). Two consequences, both deliberate: a
+  // session cookie grants nothing here, and CSRF does not apply — it exists
+  // because browsers attach cookies automatically, and nothing below reads one.
+  // The guard is on the prefix, so a job route added later is covered too.
+  app.use("/api/*", bearerAuth());
+  app.route("/", apiRoutes);
+  // Anything else under /api is not a job route and does not exist.
+  app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
+
   app.use(
     "*",
     sessionMiddleware({
@@ -116,6 +129,8 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.route("/", variantRoutes);
   app.route("/", tailoringRoutes);
   app.route("/", letterRoutes);
+  app.route("/", applicationRoutes);
+  app.route("/", tokenRoutes);
   app.route("/", coverageRoutes);
 
   app.notFound((c) => c.text("Not found.", 404));

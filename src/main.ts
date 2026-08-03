@@ -25,6 +25,9 @@ import { PostgresFactRepo } from "@adapters/db/fact-repo.ts";
 import { PostgresVariantRepo } from "@adapters/db/variant-repo.ts";
 import { PostgresTailoringRepo } from "@adapters/db/tailoring-repo.ts";
 import { PostgresDocumentRepo } from "@adapters/db/document-repo.ts";
+import { PostgresApplicationRepo } from "@adapters/db/application-repo.ts";
+import { PostgresApiTokenRepo } from "@adapters/db/api-token-repo.ts";
+import { ApiTokenService } from "@auth/api-token.ts";
 import { AnthropicLlmClient } from "@adapters/llm/anthropic.ts";
 import { VoyageEmbedder } from "@adapters/embedding/voyage.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
@@ -99,6 +102,8 @@ const services: Services = {
   tailoring: new PostgresTailoringRepo(sql),
   documents: new PostgresDocumentRepo(sql),
   llm,
+  applications: new PostgresApplicationRepo(sql),
+  apiTokens: new ApiTokenService(new PostgresApiTokenRepo(sql), systemClock),
   clock: systemClock,
   logger,
 };

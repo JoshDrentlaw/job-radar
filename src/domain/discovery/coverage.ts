@@ -40,9 +40,15 @@ export interface CollectionReport extends CollectionRun {
 
 export interface CollectionRunRepo {
   start(run: Omit<CollectionRun, "finishedAt">): Promise<void>;
-  finish(run: CollectionRun): Promise<void>;
+  /**
+   * Records the totals *and* the per-board breakdown behind them. The two are
+   * written together because a total without its denominator is exactly the
+   * artifact §10 exists to prevent.
+   */
+  finish(report: CollectionReport): Promise<void>;
   recent(limit: number): Promise<CollectionRun[]>;
   get(id: string): Promise<CollectionRun | null>;
+  boardOutcomes(runId: string): Promise<BoardOutcome[]>;
 }
 
 /**
