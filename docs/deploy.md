@@ -3,8 +3,9 @@
 A runbook for the first deploy onto a single Ubuntu droplet, and for every deploy after it. Written
 for Ubuntu 24.04 LTS; other versions differ mainly in the Postgres package name.
 
-The shape (§13): the app binds **localhost only** and nginx terminates TLS in front of it. Nothing
-but nginx can reach the app, and nothing but the app can reach the database.
+The shape (§13): the app binds **localhost only** and a reverse proxy terminates TLS in front of it.
+Nothing but the proxy can reach the app, and nothing but the app can reach the database. nginx and
+Caddy are both covered in step 8; the app does not care which.
 
 ## Decide the hostname first
 
@@ -213,7 +214,53 @@ journalctl -u job-radar -n 50 --no-pager
 Two warnings on a fresh boot are expected and correct: no embedding key, no Anthropic key, and
 `no admin account exists`.
 
-## 8. nginx and TLS
+## 8. The reverse proxy and TLS
+
+**First, find out what already serves HTTP on this box.** A droplet that hosts anything else already
+has a reverse proxy on port 80, and two of them cannot both bind it — you get
+`bind() to 0.0.0.0:80 failed (98: Address already in use)`, and under certbot that arrives wrapped
+in a failed rollback which reads like a certificate problem rather than a port one:
+
+```bash
+ss -tlnp | grep -E ':(80|443)\s' || echo "nothing on 80 or 443 — a clean box"
+```
+
+Whatever the answer, Job Radar goes behind **one** proxy, and the requirements are the same three:
+forward to the app's port, pass the client address along, and **add no security headers** — the app
+sets its own CSP, and a second conflicting policy is how the passkey script stops loading.
+
+### If Caddy is already there
+
+The easiest case. Caddy issues and renews certificates itself, so there is no certbot and no nginx.
+Add a block to `/etc/caddy/Caddyfile` alongside whatever is already in it:
+
+```caddyfile
+jobs.example.com {
+    reverse_proxy 127.0.0.1:8010
+}
+```
+
+```bash
+caddy validate --config /etc/caddy/Caddyfile
+systemctl reload caddy
+```
+
+That is the whole configuration. Caddy's `reverse_proxy` already **appends** the peer address to
+`X-Forwarded-For` rather than replacing it, and sets `X-Forwarded-Proto` — which is exactly what the
+app's client-IP handling expects (see the note at the end of this step). It also redirects HTTP to
+HTTPS on its own.
+
+If you installed nginx before discovering Caddy was there, stop it so it does not fight for the port
+on the next reboot — and remove any certificate certbot managed to issue, or its renewal timer will
+fail forever against a port it cannot have:
+
+```bash
+systemctl disable --now nginx
+certbot certificates                          # anything listed?
+certbot delete --cert-name jobs.example.com   # only if it is
+```
+
+### If nothing is there
 
 ```bash
 apt-get install -y nginx certbot python3-certbot-nginx
@@ -235,22 +282,29 @@ server {
 EOF
 
 ln -sf /etc/nginx/sites-available/job-radar /etc/nginx/sites-enabled/
+# Only if this box serves nothing else — on a shared droplet the default site
+# may be another application's.
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 certbot --nginx -d $DOMAIN
 ```
 
-`proxy_add_x_forwarded_for` is the important one and the default for a reason: it **appends** the
-address nginx actually talked to, so the rightmost entry is the only one the proxy vouches for. The
-app reads the rightmost entry precisely because everything left of it arrived in the client's own
-header and is attacker-chosen — that is what stops a scanner rotating fake IPs past the login rate
-limiter.
-
-Do not add security headers in nginx. The app sets its own CSP, and a second conflicting policy is
-how the passkey script stops loading.
-
 Certbot installs a renewal timer. Confirm it: `systemctl list-timers | grep certbot`.
+
+### If Apache is already there
+
+`certbot --nginx` is the wrong plugin; use `--apache`. The vhost needs
+`ProxyPass / http://127.0.0.1:8010/`, `ProxyPassReverse` to match, and `mod_remoteip` configured so
+the client address survives.
+
+### Why the forwarded address matters
+
+Whichever proxy you use, it must **append** to `X-Forwarded-For` rather than overwrite it. nginx's
+`proxy_add_x_forwarded_for` and Caddy's `reverse_proxy` both do. The app reads the **rightmost**
+entry, because that is the only one the proxy itself vouches for — everything left of it arrived in
+the client's own header and is attacker-chosen. Taking the leftmost would let a scanner rotate fake
+IPs past the login rate limiter.
 
 ## 9. The one account
 
