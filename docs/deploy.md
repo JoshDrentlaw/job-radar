@@ -35,14 +35,24 @@ A system account with no shell: nothing signs in as it, systemd just runs as it.
 ## 2. Firewall and updates
 
 ```bash
-ufw allow OpenSSH
-ufw allow 'Nginx Full'
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
 ufw --force enable
 
 apt-get update
 apt-get install -y unattended-upgrades
 dpkg-reconfigure -plow unattended-upgrades
 ```
+
+Port numbers rather than ufw's named application profiles, deliberately. A profile like
+`'Nginx Full'` is a file dropped into `/etc/ufw/applications.d/` **by the nginx package**, so it
+does not exist until step 8 and `ufw allow 'Nginx Full'` fails here with a profile-not-found error.
+Ports have no such ordering dependency, and the firewall should be closed before anything is
+listening rather than after.
+
+(Once nginx is installed you can use the profiles if you prefer — `ufw app list` shows what is
+available. They resolve to the same two ports.)
 
 Port 8000 is deliberately **not** opened. The app is not meant to be reachable except through nginx.
 
@@ -132,9 +142,18 @@ Three things that will bite if changed casually:
 - **`APP_ENV=production` requires an `https://` `APP_BASE_URL`.** The app refuses to start
   otherwise. Production also sets `Secure` on the session cookie, so **the app is unusable over
   plain HTTP** — that is deliberate, and it means TLS has to work before you can sign in.
-- **`PORT` must stay 8000** unless you also edit the `start` task in `deno.json`. The permission
-  allowlist names the port literally (`--allow-net=127.0.0.1:8000`), and a mismatch fails at bind
-  time. That is the allowlist doing its job.
+- **`PORT` must be free.** A droplet often has something else on 8000 already; if it does, the
+  service crash-loops with `AddrInUse` and nothing else in the log is wrong. Check before you write
+  the file, and pick anything unused — nginx is what the world talks to, so the number is private:
+
+  ```bash
+  ss -tlnp | grep -E ':(8000|8010)\b' || echo "both free"
+  ```
+
+  Whatever you choose, use the same number in the nginx `proxy_pass` at step 8.
+- **`HOST` must stay `127.0.0.1`.** The permission allowlist grants network access to that address
+  and no other, so binding `0.0.0.0` fails outright rather than quietly exposing the app. That is
+  the allowlist enforcing the architecture.
 - **`EMBEDDING_MODEL` is not a casual setting.** It is recorded on every stored vector and every
   consumer filters by it, so changing it re-embeds the whole corpus and rescores everything — at
   your expense.
@@ -187,7 +206,7 @@ nine.
 Check it came up:
 
 ```bash
-curl -s localhost:8000/healthz     # {"status":"ok"}
+curl -s localhost:8000/healthz     # {"status":"ok"} — use your PORT if you changed it
 journalctl -u job-radar -n 50 --no-pager
 ```
 
@@ -205,7 +224,7 @@ server {
     server_name $DOMAIN;
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8000;   # must match PORT in /etc/job-radar.env
         proxy_http_version 1.1;
         proxy_set_header Host              \$host;
         proxy_set_header X-Real-IP         \$remote_addr;
