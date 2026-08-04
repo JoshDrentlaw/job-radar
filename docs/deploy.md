@@ -215,6 +215,28 @@ Two warnings on a fresh boot are expected and correct: no embedding key, no Anth
 
 ## 8. nginx and TLS
 
+**First, find out whether anything already serves HTTP on this box.** A droplet that already hosts a
+site has a reverse proxy on port 80, and two of them cannot both bind it — you get
+`bind() to 0.0.0.0:80 failed (98: Address already in use)` and, if it happens under certbot, a
+failed rollback on top:
+
+```bash
+ss -tlnp | grep -E ':(80|443)\s' || echo "nothing on 80 or 443 — a clean box, carry on below"
+```
+
+- **Nothing there.** Follow the rest of this step as written.
+- **nginx already running.** Do not install a second one. Skip to the site file below, then
+  `systemctl reload nginx` — reload, not restart, so the running site is not interrupted. certbot
+  then works normally.
+- **Apache, Caddy, or a container publishing `:80`.** That process is your reverse proxy, and Job
+  Radar goes behind _it_ rather than behind a new nginx. Apache: a vhost with
+  `ProxyPass / http://127.0.0.1:8010/` and `certbot --apache`. Caddy: a site block with
+  `reverse_proxy 127.0.0.1:8010` and no certbot at all, since Caddy issues certificates itself.
+  Whatever it is, the requirements are the same three: proxy to the app's port, forward the client
+  address, and do not set security headers (see below).
+
+The rest of this step assumes nginx is the reverse proxy.
+
 ```bash
 apt-get install -y nginx certbot python3-certbot-nginx
 
@@ -235,6 +257,8 @@ server {
 EOF
 
 ln -sf /etc/nginx/sites-available/job-radar /etc/nginx/sites-enabled/
+# Only if this box serves nothing else — on a shared droplet the default site
+# may be another application's.
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
