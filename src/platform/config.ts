@@ -65,14 +65,56 @@ export type EnvSource = (key: string) => string | undefined;
 const denoEnv: EnvSource = (key) => Deno.env.get(key);
 
 /**
- * Build the config from an environment source. The source is injectable so
- * tests never touch the real process environment.
+ * What a command-line tool needs, and deliberately nothing else.
+ *
+ * `migrate` and `seed-admin` touch the database and write logs. They have no
+ * business reading an embedding key or an Anthropic key, and their permission
+ * allowlists in `deno.json` say so — which means `loadConfig`, which reads
+ * every setting the *server* needs, would fail in those tools at the first
+ * `Deno.env.get` it is not permitted to make. It did, for as long as both
+ * tasks existed; CI is what surfaced it.
  */
-export function loadConfig(source: EnvSource = denoEnv): Config {
+export interface ToolConfig {
+  readonly env: AppEnv;
+  readonly databaseUrl: string;
+  readonly logLevel: LogLevel;
+}
+
+export function loadToolConfig(source: EnvSource = denoEnv): ToolConfig {
+  const env = readEnv(source);
+  return { env, databaseUrl: readDatabaseUrl(source), logLevel: readLogLevel(source, env) };
+}
+
+function readEnv(source: EnvSource): AppEnv {
   const rawEnv = optional(source, "APP_ENV", "development");
   if (rawEnv !== "development" && rawEnv !== "production") {
     throw new ConfigError(`APP_ENV must be "development" or "production", got: ${rawEnv}`);
   }
+  return rawEnv;
+}
+
+function readDatabaseUrl(source: EnvSource): string {
+  const databaseUrl = required(source, "DATABASE_URL");
+  if (!databaseUrl.startsWith("postgres://") && !databaseUrl.startsWith("postgresql://")) {
+    throw new ConfigError("DATABASE_URL must be a postgres:// or postgresql:// URL");
+  }
+  return databaseUrl;
+}
+
+function readLogLevel(source: EnvSource, env: AppEnv): LogLevel {
+  const rawLogLevel = optional(source, "LOG_LEVEL", env === "production" ? "info" : "debug");
+  if (!LOG_LEVELS.includes(rawLogLevel as LogLevel)) {
+    throw new ConfigError(`LOG_LEVEL must be one of ${LOG_LEVELS.join(", ")}, got: ${rawLogLevel}`);
+  }
+  return rawLogLevel as LogLevel;
+}
+
+/**
+ * Build the full server config from an environment source. The source is
+ * injectable so tests never touch the real process environment.
+ */
+export function loadConfig(source: EnvSource = denoEnv): Config {
+  const rawEnv = readEnv(source);
 
   const rawPort = optional(source, "PORT", "8000");
   const port = Number(rawPort);
@@ -80,17 +122,8 @@ export function loadConfig(source: EnvSource = denoEnv): Config {
     throw new ConfigError(`PORT must be an integer in 1..65535, got: ${rawPort}`);
   }
 
-  const rawLogLevel = optional(source, "LOG_LEVEL", rawEnv === "production" ? "info" : "debug");
-  if (!LOG_LEVELS.includes(rawLogLevel as LogLevel)) {
-    throw new ConfigError(
-      `LOG_LEVEL must be one of ${LOG_LEVELS.join(", ")}, got: ${rawLogLevel}`,
-    );
-  }
-
-  const databaseUrl = required(source, "DATABASE_URL");
-  if (!databaseUrl.startsWith("postgres://") && !databaseUrl.startsWith("postgresql://")) {
-    throw new ConfigError("DATABASE_URL must be a postgres:// or postgresql:// URL");
-  }
+  const logLevel = readLogLevel(source, rawEnv);
+  const databaseUrl = readDatabaseUrl(source);
 
   const baseUrl = optional(source, "APP_BASE_URL", `http://127.0.0.1:${port}`);
   let parsedBase: URL;
@@ -123,7 +156,7 @@ export function loadConfig(source: EnvSource = denoEnv): Config {
     embeddingModel: optional(source, "EMBEDDING_MODEL", "voyage-3.5"),
     ...(anthropicApiKey !== "" ? { anthropicApiKey } : {}),
     anthropicModel: optional(source, "ANTHROPIC_MODEL", "claude-opus-5"),
-    logLevel: rawLogLevel as LogLevel,
+    logLevel,
     secureCookies: rawEnv === "production",
   };
 }

@@ -9,7 +9,7 @@
  *   ADMIN_USERNAME=josh ADMIN_PASSWORD='...' deno task seed-admin --reset
  */
 
-import { loadConfig } from "@platform/config.ts";
+import { loadToolConfig } from "@platform/config.ts";
 import { createLogger } from "@platform/logger.ts";
 import { closeDb, createDb } from "@platform/db.ts";
 import { PostgresUserRepo } from "@adapters/db/user-repo.ts";
@@ -17,7 +17,7 @@ import { PostgresSessionRepo } from "@adapters/db/session-repo.ts";
 import { assertAcceptablePassword, hashPassword, WeakPasswordError } from "@auth/password.ts";
 
 async function main(): Promise<number> {
-  const config = loadConfig();
+  const config = loadToolConfig();
   const logger = createLogger(config.logLevel, { component: "seed-admin" });
   const sql = createDb(config.databaseUrl, { max: 1 });
   const users = new PostgresUserRepo(sql);

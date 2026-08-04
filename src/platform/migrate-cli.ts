@@ -2,7 +2,7 @@
  * `deno task migrate [up|down|status] [steps]`
  */
 
-import { loadConfig } from "./config.ts";
+import { loadToolConfig } from "./config.ts";
 import { createLogger } from "./logger.ts";
 import { closeDb, createDb } from "./db.ts";
 import { appliedMigrations, loadMigrations, migrateDown, migrateUp } from "./migrate.ts";
@@ -10,7 +10,7 @@ import { appliedMigrations, loadMigrations, migrateDown, migrateUp } from "./mig
 const MIGRATIONS_DIR = "./migrations";
 
 async function main(): Promise<number> {
-  const config = loadConfig();
+  const config = loadToolConfig();
   const logger = createLogger(config.logLevel, { component: "migrate" });
   const sql = createDb(config.databaseUrl, { max: 1 });
 
