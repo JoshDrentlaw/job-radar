@@ -35,14 +35,24 @@ A system account with no shell: nothing signs in as it, systemd just runs as it.
 ## 2. Firewall and updates
 
 ```bash
-ufw allow OpenSSH
-ufw allow 'Nginx Full'
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
 ufw --force enable
 
 apt-get update
 apt-get install -y unattended-upgrades
 dpkg-reconfigure -plow unattended-upgrades
 ```
+
+Port numbers rather than ufw's named application profiles, deliberately. A profile like
+`'Nginx Full'` is a file dropped into `/etc/ufw/applications.d/` **by the nginx package**, so it
+does not exist until step 8 and `ufw allow 'Nginx Full'` fails here with a profile-not-found error.
+Ports have no such ordering dependency, and the firewall should be closed before anything is
+listening rather than after.
+
+(Once nginx is installed you can use the profiles if you prefer — `ufw app list` shows what is
+available. They resolve to the same two ports.)
 
 Port 8000 is deliberately **not** opened. The app is not meant to be reachable except through nginx.
 
