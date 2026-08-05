@@ -427,10 +427,24 @@ install -m 644 /opt/job-radar/deploy/job-radar-deploy.{service,timer} /etc/syste
 systemctl daemon-reload
 systemctl enable --now job-radar-deploy.timer
 
-# Watch one cycle before trusting it.
-systemctl start job-radar-deploy.service
-journalctl -u job-radar-deploy -n 20 --no-pager
+# Watch one cycle before trusting it. Run the script directly with -v rather
+# than `systemctl start`: the timer's job is to be silent when there is nothing
+# to do, so a manual run through systemd tells you nothing at all.
+/usr/local/bin/job-radar-deploy -v
 ```
+
+`-v` prints the deployed commit, the available one, and what it decided:
+
+```
+watching origin/main
+  deployed: db830bbd
+  available: ef11bafd
+  checks: 2/2 green
+deploying ef11bafd (2/2 checks green)
+```
+
+…or, when there is nothing to do, `up to date — nothing to deploy`. Without `-v` — which is how the
+timer runs it — a no-op prints nothing and a real deploy prints everything.
 
 It does three things a bare `git pull && systemctl restart` does not:
 
