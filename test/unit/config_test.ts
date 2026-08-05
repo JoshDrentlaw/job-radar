@@ -146,3 +146,54 @@ Deno.test("validation still bites in the narrow loader", () => {
     'APP_ENV must be "development" or "production"',
   );
 });
+
+/* ------------------------------------------------ the task allowlists ----- */
+
+/**
+ * The permission lists in deno.json are strings, so nothing typechecks them and
+ * a missing entry only fails at runtime — in the one configuration that has the
+ * key set, which is production and nowhere else. That is exactly how the app
+ * shipped unable to start with ANTHROPIC_API_KEY present: the Anthropic SDK
+ * reads ANTHROPIC_BASE_URL (among others) inside its constructor, the start
+ * task granted three specific ANTHROPIC_ names, and the client is only
+ * constructed when a key exists. CI never sets one, so CI never saw it.
+ */
+Deno.test("the server tasks grant the whole ANTHROPIC_ prefix, not named vars", async () => {
+  // deno.json is JSONC — it carries comments, so JSON.parse will not have it.
+  // The task values are single-line strings; a regex is enough and needs no
+  // extra dependency to read the project's own manifest.
+  const manifest = await Deno.readTextFile("deno.json");
+  const taskCommand = (name: string): string => {
+    const found = new RegExp(`"${name}":\\s*"((?:[^"\\\\]|\\\\.)*)"`).exec(manifest);
+    if (found === null) throw new Error(`no task named ${name} in deno.json`);
+    return found[1]!;
+  };
+
+  for (const task of ["dev", "start"]) {
+    const allowEnv = /--allow-env=(\S+)/.exec(taskCommand(task))?.[1] ?? "";
+    const entries = allowEnv.split(",");
+
+    assertEquals(
+      entries.includes("ANTHROPIC_*"),
+      true,
+      `${task} must grant ANTHROPIC_* — the SDK reads variables we do not name`,
+    );
+    // Naming them individually is the bug, not a belt-and-braces extra.
+    assertEquals(
+      entries.some((entry) => entry.startsWith("ANTHROPIC_") && entry !== "ANTHROPIC_*"),
+      false,
+      `${task} should not list individual ANTHROPIC_ variables alongside the prefix`,
+    );
+    assertEquals(entries.includes("VOYAGE_API_KEY"), true, `${task} needs the embedding key`);
+  }
+
+  // The command-line tools construct neither client and are granted neither.
+  for (const task of ["migrate", "seed-admin"]) {
+    const allowEnv = /--allow-env=(\S+)/.exec(taskCommand(task))?.[1] ?? "";
+    assertEquals(
+      allowEnv.includes("ANTHROPIC") || allowEnv.includes("VOYAGE"),
+      false,
+      `${task} has no business reading an API key`,
+    );
+  }
+});
