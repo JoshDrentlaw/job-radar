@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+#
+# Pull-based deploy. Run by job-radar-deploy.timer.
+#
+# Pull rather than push (§13): nothing needs an inbound port, and no credential
+# with access to this box is stored anywhere off it. A GitHub Actions job that
+# SSHes in would need a private key in repository secrets, and the blast radius
+# of that key is the whole droplet — including whatever else it hosts.
+#
+# Three things this does that `git pull && systemctl restart` does not:
+#
+#   1. Deploys only what CI has already gone green on. A timer that takes
+#      whatever is on main will eventually take a broken commit at 3am.
+#   2. Dumps the database first, because restarting applies migrations and
+#      migrations are forward-only in production.
+#   3. Checks the app answers afterwards, and says so loudly if it does not.
+#
+# It deliberately does not roll back on failure. Once a migration has been
+# applied, checking out the previous commit does not undo it, and a script that
+# pretends otherwise would turn one broken deploy into two problems.
+
+set -euo pipefail
+
+REPO=${REPO:-/opt/job-radar}
+BRANCH=${BRANCH:-main}
+SERVICE=${SERVICE:-job-radar}
+REPO_SLUG=${REPO_SLUG:-JoshDrentlaw/job-radar}
+RUN_AS=${RUN_AS:-jobradar}
+ENV_FILE=${ENV_FILE:-/etc/job-radar.env}
+BACKUP_DIR=${BACKUP_DIR:-/var/backups/job-radar}
+DENO=${DENO:-/usr/local/bin/deno}
+
+log() { logger -t job-radar-deploy -- "$*"; echo "$*"; }
+die() { log "FAILED: $*"; exit 1; }
+
+command -v jq >/dev/null || die "jq is required (apt-get install -y jq)"
+
+# The health check needs the port the app was actually configured with.
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+HEALTH="http://127.0.0.1:${PORT:-8000}/healthz"
+
+cd "$REPO"
+
+sudo -u "$RUN_AS" git fetch --quiet origin "$BRANCH"
+current=$(git rev-parse HEAD)
+target=$(git rev-parse "origin/$BRANCH")
+
+if [ "$current" = "$target" ]; then
+  exit 0 # Nothing to do. Silent, because this runs every few minutes.
+fi
+
+# Only deploy a commit CI has approved. A public repository needs no token for
+# this; if the checks have not finished yet, we simply try again next tick.
+checks=$(curl -fsS -H 'Accept: application/vnd.github+json' \
+  "https://api.github.com/repos/$REPO_SLUG/commits/$target/check-runs") ||
+  die "could not reach the GitHub checks API"
+
+total=$(jq -r '.total_count' <<<"$checks")
+green=$(jq -r '[.check_runs[] | select(.status == "completed" and .conclusion == "success")] | length' <<<"$checks")
+
+if [ "$total" -eq 0 ]; then
+  log "holding at ${current:0:8}: no checks reported for ${target:0:8} yet"
+  exit 0
+fi
+if [ "$total" -ne "$green" ]; then
+  log "holding at ${current:0:8}: ${target:0:8} has $green/$total checks green"
+  exit 0
+fi
+
+log "deploying ${target:0:8} ($green/$total checks green)"
+
+# Restarting applies migrations, and they are forward-only.
+mkdir -p "$BACKUP_DIR"
+backup="$BACKUP_DIR/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${target:0:8}.dump"
+sudo -u postgres pg_dump -Fc jobradar >"$backup" || die "pg_dump failed; not deploying"
+find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete
+
+# --ff-only, so a repository someone has edited by hand stops here rather than
+# being silently merged.
+sudo -u "$RUN_AS" git merge --ff-only "origin/$BRANCH" ||
+  die "cannot fast-forward $REPO — it has local commits or changes"
+
+# Fetch dependencies before the restart rather than during boot, and fail here
+# if the lockfile does not match the code.
+sudo -u "$RUN_AS" env DENO_DIR="$REPO/.deno" "$DENO" install --frozen ||
+  die "dependency install failed at ${target:0:8}"
+
+systemctl restart "$SERVICE"
+
+for _ in $(seq 1 30); do
+  sleep 1
+  if curl -fsS --max-time 2 "$HEALTH" >/dev/null 2>&1; then
+    log "deployed ${target:0:8}; backup at $backup"
+    exit 0
+  fi
+done
+
+die "${target:0:8} is deployed but $HEALTH did not answer. Backup at $backup. \
+Look at: journalctl -u $SERVICE -n 50"

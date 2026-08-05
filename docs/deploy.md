@@ -377,6 +377,27 @@ chmod +x /etc/cron.daily/job-radar-backup
 A backup on the same droplet survives your mistakes but not the droplet's. Copy it off —
 DigitalOcean Spaces, `rsync` to your laptop, anything.
 
+## Changing configuration
+
+`/etc/job-radar.env` is read by systemd when the service starts, and the app validates every setting
+once at boot — a missing or malformed value is a startup failure, never a surprise at request time.
+So a change to it needs exactly one command:
+
+```bash
+sudo systemctl restart job-radar
+```
+
+`daemon-reload` is **not** needed; that is only for edits to the `.service` unit itself.
+
+Four values have a consequence beyond the restart:
+
+| Change                                 | Also do this                                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `PORT`                                 | Update the proxy — Caddyfile `reverse_proxy` or nginx `proxy_pass` — and reload it                   |
+| `APP_BASE_URL` hostname                | **Every registered passkey stops working.** The password still does. Re-register on the new hostname |
+| `EMBEDDING_MODEL`                      | Re-embeds the whole corpus and rescores everything, at your expense                                  |
+| `VOYAGE_API_KEY` / `ANTHROPIC_API_KEY` | Nothing else — the boot warnings disappear and the features light up                                 |
+
 ## Deploying a change
 
 ```bash
@@ -391,6 +412,41 @@ refuses `down` when `APP_ENV=production`, and an already-applied migration must 
 because its checksum is verified on every boot. A change to applied SQL is a new migration, always.
 
 Take a dump before a restart that carries migrations.
+
+### Doing it automatically
+
+A timer on the droplet watches `main` and deploys when it moves. **Pull, not push**: nothing needs
+an inbound port, and no credential with access to this box is stored anywhere off it. The
+alternative — a GitHub Actions job that SSHes in — needs a private key in repository secrets, and
+the blast radius of that key is the whole droplet, including anything else it hosts.
+
+```bash
+apt-get install -y jq
+install -m 755 /opt/job-radar/deploy/job-radar-deploy /usr/local/bin/
+install -m 644 /opt/job-radar/deploy/job-radar-deploy.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now job-radar-deploy.timer
+
+# Watch one cycle before trusting it.
+systemctl start job-radar-deploy.service
+journalctl -u job-radar-deploy -n 20 --no-pager
+```
+
+It does three things a bare `git pull && systemctl restart` does not:
+
+- **Deploys only what CI has gone green on.** It asks the GitHub checks API about the target commit
+  and holds if any check failed or none has reported yet. A timer that takes whatever is on `main`
+  will eventually take a broken commit at three in the morning.
+- **Dumps the database first**, into `/var/backups/job-radar/pre-deploy-*.dump`, because the restart
+  applies migrations and migrations do not come back.
+- **Checks the app answers afterwards** and logs loudly if it does not.
+
+It deliberately does **not** roll back. Once a migration is applied, checking out the previous
+commit does not undo it, and a script that pretended otherwise would turn one broken deploy into two
+problems. It also refuses to fast-forward a checkout that has been edited by hand, rather than
+merging over your changes.
+
+`journalctl -u job-radar-deploy` is the whole audit trail. Quiet ticks log nothing.
 
 ## When something is wrong
 
