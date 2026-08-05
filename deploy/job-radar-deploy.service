@@ -1,0 +1,11 @@
+[Unit]
+Description=Deploy Job Radar if main has moved and CI is green
+After=network-online.target job-radar.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/job-radar-deploy
+# Runs as root: it restarts the service and takes a database dump. The git
+# operations drop to the jobradar user, so the checkout is never root-owned.
+User=root

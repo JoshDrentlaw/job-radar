@@ -1,0 +1,13 @@
+[Unit]
+Description=Check for a new Job Radar release
+
+[Timer]
+# Five minutes is a compromise: fast enough that a merge feels deployed, slow
+# enough that a bad commit has time to be reverted before it lands. The
+# randomised delay keeps it off the exact minute boundary.
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target
