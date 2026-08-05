@@ -30,6 +30,13 @@ ENV_FILE=${ENV_FILE:-/etc/job-radar.env}
 BACKUP_DIR=${BACKUP_DIR:-/var/backups/job-radar}
 DENO=${DENO:-/usr/local/bin/deno}
 
+# Every git call runs as the user that owns the checkout. Git refuses to touch
+# a repository owned by somebody else ("detected dubious ownership"), so a root
+# `git rev-parse` here fails even though the fetch beside it succeeded. Adding
+# safe.directory for root would silence that; dropping privilege is the better
+# answer, since nothing about reading this repository needs root.
+git_as() { sudo -u "$RUN_AS" git -C "$REPO" "$@"; }
+
 log() { logger -t job-radar-deploy -- "$*"; echo "$*"; }
 say() { if [ "$verbose" = true ]; then echo "$*"; fi; }
 die() { log "FAILED: $*"; exit 1; }
@@ -55,9 +62,9 @@ HEALTH="http://127.0.0.1:${PORT:-8000}/healthz"
 
 cd "$REPO"
 
-sudo -u "$RUN_AS" git fetch --quiet origin "$BRANCH"
-current=$(git rev-parse HEAD)
-target=$(git rev-parse "origin/$BRANCH")
+git_as fetch --quiet origin "$BRANCH"
+current=$(git_as rev-parse HEAD)
+target=$(git_as rev-parse "origin/$BRANCH")
 
 say "watching origin/$BRANCH"
 say "  deployed: ${current:0:8}"
@@ -97,7 +104,7 @@ find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete
 
 # --ff-only, so a repository someone has edited by hand stops here rather than
 # being silently merged.
-sudo -u "$RUN_AS" git merge --ff-only "origin/$BRANCH" ||
+git_as merge --ff-only "origin/$BRANCH" ||
   die "cannot fast-forward $REPO — it has local commits or changes"
 
 # Fetch dependencies before the restart rather than during boot, and fail here
