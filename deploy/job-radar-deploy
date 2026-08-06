@@ -89,9 +89,35 @@ DATABASE=${PGDATABASE:-$(db_name)}
 
 cd "$REPO"
 
-git_as fetch --quiet origin "$BRANCH"
-current=$(git_as rev-parse HEAD)
-target=$(git_as rev-parse "origin/$BRANCH")
+# The first git call is where a broken installation shows itself, so it says so
+# rather than letting `set -e` exit 128 into a journal line that reads like a
+# git problem. It has been exactly that once: an older copy of this script ran
+# `git rev-parse` as root, git refused the jobradar-owned checkout as "dubious
+# ownership", and the timer failed silently every five minutes for weeks while
+# the box looked fine. Every hypothesis below is cheap to state and expensive to
+# guess at from `exit 128`.
+if ! git_as rev-parse --git-dir >/dev/null 2>&1; then
+  die "cannot read the git repository at $REPO as '$RUN_AS'. Check, in order:
+  - is the checkout owned by $RUN_AS?   stat -c '%U:%G' $REPO $REPO/.git
+  - is /usr/local/bin/job-radar-deploy the current copy?
+      diff /usr/local/bin/job-radar-deploy $REPO/deploy/job-radar-deploy
+  - does $REPO/.git exist at all?"
+fi
+
+git_as fetch --quiet origin "$BRANCH" ||
+  die "could not fetch origin/$BRANCH — network, or a remote this checkout cannot reach"
+current=$(git_as rev-parse HEAD) || die "could not read HEAD in $REPO"
+target=$(git_as rev-parse "origin/$BRANCH") ||
+  die "no origin/$BRANCH in $REPO — is the branch name right?"
+
+# A checkout parked on some other branch would be fast-forwarded to origin/main
+# below and left there, so production would run main's code on a branch nobody
+# expects. Refuse instead, and name the branch it is actually on.
+on=$(git_as rev-parse --abbrev-ref HEAD)
+if [ "$on" != "$BRANCH" ]; then
+  die "$REPO is on branch '$on', not '$BRANCH'. \
+Put it back: sudo -u $RUN_AS git -C $REPO checkout $BRANCH"
+fi
 
 say "watching origin/$BRANCH"
 say "  deployed: ${current:0:8}"
@@ -160,6 +186,60 @@ find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete
 # being silently merged.
 git_as merge --ff-only "origin/$BRANCH" ||
   die "cannot fast-forward $REPO — it has local commits or changes"
+
+# Deploy this script too.
+#
+# It used to be copied to /usr/local/bin by hand, which meant every fix to it
+# sat in the repository doing nothing until somebody remembered. That is not a
+# hypothetical: the installed copy fell four commits behind and the timer failed
+# on every tick for weeks, with the fix already merged and sitting one directory
+# away. A deploy tool that cannot deploy itself is the one component with no
+# safety net.
+#
+# `install` and `cp` both write the destination in place — same inode, contents
+# mutated underneath anything holding it open. Bash reads a running script
+# incrementally and seeks by byte offset, so rewriting this file mid-run leaves
+# the interpreter's position pointing into text that is no longer what it parsed.
+# Whether that actually breaks depends on how much bash has buffered and how the
+# sizes line up, which is a coin toss to rely on and impossible to reproduce
+# after the fact.
+#
+# `mv` sidesteps the question rather than betting on it: rename() swaps the
+# directory entry to a new inode, and this process keeps reading the old one,
+# untouched, to the end.
+#
+# Only the units are a restart-of-the-timer concern; a changed script is picked
+# up by the next tick on its own.
+self_install() {
+  local src="$1" dest="$2" mode="$3"
+  cmp -s "$src" "$dest" && return 1
+  local tmp
+  tmp=$(mktemp "$(dirname "$dest")/.job-radar-deploy.XXXXXX") || return 1
+  if ! install -m "$mode" "$src" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$dest"
+  return 0
+}
+
+if self_install "$REPO/deploy/job-radar-deploy" /usr/local/bin/job-radar-deploy 755; then
+  log "updated /usr/local/bin/job-radar-deploy; the next tick runs the new one"
+fi
+
+units_changed=false
+for unit in job-radar-deploy.service job-radar-deploy.timer; do
+  if self_install "$REPO/deploy/$unit" "/etc/systemd/system/$unit" 644; then
+    units_changed=true
+    log "updated /etc/systemd/system/$unit"
+  fi
+done
+if [ "$units_changed" = true ]; then
+  systemctl daemon-reload
+  # Not `restart` — this script is running inside job-radar-deploy.service, and
+  # restarting the unit that owns this process would kill the deploy in flight.
+  say "  systemd units reloaded"
+fi
 
 # Fetch dependencies before the restart rather than during boot, and fail here
 # if the lockfile does not match the code.

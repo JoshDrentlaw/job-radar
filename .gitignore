@@ -6,3 +6,8 @@
 # Deno
 deno.lock.bak
 /coverage/
+# The dependency cache. The deploy sets DENO_DIR to a directory inside the
+# checkout — deliberately, so the cache is owned by the service account and
+# survives nothing else — which means it shows up as untracked forever unless
+# it is named here.
+/.deno/
