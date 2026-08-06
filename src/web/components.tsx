@@ -8,7 +8,7 @@
  * it out?" is answered on screen without the reader having to ask (§5).
  */
 
-import type { FC, PropsWithChildren } from "hono/jsx";
+import type { Child, FC, PropsWithChildren } from "hono/jsx";
 import type { Provenance, RemoteHint } from "@domain/discovery/types.ts";
 
 /** A value taken verbatim from the feed. */
@@ -128,5 +128,79 @@ export const Metric: FC<{ label: string; value: string | number; hint?: string }
   <div class="metric" {...(props.hint ? { title: props.hint } : {})}>
     <div class="metric-value">{props.value}</div>
     <div class="metric-label">{props.label}</div>
+  </div>
+);
+
+/* ---------------------------------------------------------------- forms --- */
+
+/**
+ * The form field standard.
+ *
+ * Every labelled control in the application is one of these, and the reason is
+ * alignment. A `.field-row` used to be a grid of loose `<div>`s, so a field
+ * carrying a hint was taller than one that did not and the row bottom-aligned
+ * into a masonry pattern — the inputs in a single row sat at three different
+ * heights. Row-level alignment cannot fix that, because the label, the control
+ * and the hint are three separate bands that must line up independently.
+ *
+ * `Field` emits exactly those three bands and the CSS places them on a subgrid,
+ * so every label in a row shares one line, every control shares the next, and
+ * hints hang below without moving anything above them. A field with no hint
+ * simply leaves the third band empty.
+ *
+ * Use `wide` for a control that should span the whole row — a textarea, mostly.
+ */
+export const Field: FC<
+  PropsWithChildren<{
+    readonly label: Child;
+    /** The id of the control being labelled. Omit only for a wrapped control. */
+    readonly for?: string;
+    readonly hint?: Child;
+    readonly wide?: boolean;
+  }>
+> = (props) => (
+  <div class={props.wide ? "field field-wide" : "field"}>
+    <label {...(props.for !== undefined ? { for: props.for } : {})}>{props.label}</label>
+    <div class="field-control">{props.children}</div>
+    {props.hint !== undefined && <p class="field-hint">{props.hint}</p>}
+  </div>
+);
+
+/**
+ * A checkbox in a field row. The box and its label are one control, so there is
+ * no separate label band — the CSS drops it into the control row instead, which
+ * is what keeps it level with the inputs beside it rather than floating above
+ * them.
+ */
+export const CheckboxField: FC<{
+  readonly label: Child;
+  readonly name: string;
+  readonly id?: string;
+  readonly checked?: boolean;
+  readonly value?: string;
+  readonly hint?: Child;
+}> = (props) => (
+  <div class="field">
+    <label class="checkbox" {...(props.id !== undefined ? { for: props.id } : {})}>
+      <input
+        type="checkbox"
+        name={props.name}
+        {...(props.id !== undefined ? { id: props.id } : {})}
+        {...(props.value !== undefined ? { value: props.value } : {})}
+        checked={props.checked ?? false}
+      />
+      {props.label}
+    </label>
+    {props.hint !== undefined && <p class="field-hint">{props.hint}</p>}
+  </div>
+);
+
+/**
+ * Buttons that belong to a field row rather than below it — a filter's "Apply".
+ * They sit in the control band so they line up with the inputs they act on.
+ */
+export const FieldActions: FC<PropsWithChildren> = (props) => (
+  <div class="field">
+    <div class="field-control row">{props.children}</div>
   </div>
 );

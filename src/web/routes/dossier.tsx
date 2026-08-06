@@ -10,7 +10,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, formatDate, Notice } from "@web/components.tsx";
+import { CsrfField, Field, formatDate, Notice } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asFactId, type FactId } from "@platform/ids.ts";
 import {
@@ -65,59 +65,83 @@ const FactForm: FC<{
   parents: readonly ResumeFact[];
   csrfToken: string;
   submitLabel: string;
-}> = (props) => (
-  <form method="post" action={props.action} class="stack">
-    <CsrfField token={props.csrfToken} />
-    <div class="field-row">
-      <div>
-        <label>Kind</label>
-        <select name="kind">
-          {FACT_KINDS.map((kind) => (
-            <option value={kind} selected={props.fact?.kind === kind}>{kind}</option>
-          ))}
-        </select>
+}> = (props) => {
+  // This form is rendered once per fact on the page, so every id needs a scope.
+  const key = props.fact === undefined ? "new" : String(props.fact.id);
+  return (
+    <form method="post" action={props.action} class="stack">
+      <CsrfField token={props.csrfToken} />
+      <div class="field-row">
+        <Field label="Kind" for={`kind-${key}`}>
+          <select id={`kind-${key}`} name="kind">
+            {FACT_KINDS.map((kind) => (
+              <option value={kind} selected={props.fact?.kind === kind}>{kind}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Parent" for={`parent-${key}`} hint="Bullets only.">
+          <select id={`parent-${key}`} name="parent_id">
+            <option value="">—</option>
+            {props.parents.map((parent) => (
+              <option value={parent.id} selected={props.fact?.parentId === parent.id}>
+                {parent.text.slice(0, 60)}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
-      <div>
-        <label>Parent (bullets only)</label>
-        <select name="parent_id">
-          <option value="">—</option>
-          {props.parents.map((parent) => (
-            <option value={parent.id} selected={props.fact?.parentId === parent.id}>
-              {parent.text.slice(0, 60)}
-            </option>
-          ))}
-        </select>
+      <Field
+        wide
+        label="Text"
+        for={`text-${key}`}
+        hint="The canonical, true statement. Variants reword it; this stays true."
+      >
+        <textarea id={`text-${key}`} name="text" rows={3} required>
+          {props.fact?.text ?? ""}
+        </textarea>
+      </Field>
+      <div class="field-row">
+        <Field label="Organization" for={`org-${key}`}>
+          <input
+            id={`org-${key}`}
+            type="text"
+            name="organization"
+            value={props.fact?.organization ?? ""}
+          />
+        </Field>
+        <Field label="Tags" for={`tags-${key}`} hint="Comma separated.">
+          <input
+            id={`tags-${key}`}
+            type="text"
+            name="tags"
+            value={props.fact?.tags.join(", ") ?? ""}
+          />
+        </Field>
       </div>
-    </div>
-    <div>
-      <label>Text — the canonical, true statement</label>
-      <textarea name="text" rows={3} required>{props.fact?.text ?? ""}</textarea>
-    </div>
-    <div class="field-row">
-      <div>
-        <label>Organization</label>
-        <input type="text" name="organization" value={props.fact?.organization ?? ""} />
+      <div class="field-row">
+        <Field label="Start" for={`start-${key}`}>
+          <input
+            id={`start-${key}`}
+            type="month"
+            name="start_date"
+            value={monthValue(props.fact?.startDate)}
+          />
+        </Field>
+        <Field label="End" for={`end-${key}`} hint="Blank means present.">
+          <input
+            id={`end-${key}`}
+            type="month"
+            name="end_date"
+            value={monthValue(props.fact?.endDate)}
+          />
+        </Field>
       </div>
-      <div>
-        <label>Tags (comma-separated)</label>
-        <input type="text" name="tags" value={props.fact?.tags.join(", ") ?? ""} />
+      <div class="row">
+        <button type="submit" class="primary">{props.submitLabel}</button>
       </div>
-    </div>
-    <div class="field-row">
-      <div>
-        <label>Start</label>
-        <input type="month" name="start_date" value={monthValue(props.fact?.startDate)} />
-      </div>
-      <div>
-        <label>End (blank = present)</label>
-        <input type="month" name="end_date" value={monthValue(props.fact?.endDate)} />
-      </div>
-    </div>
-    <div class="row">
-      <button type="submit" class="primary">{props.submitLabel}</button>
-    </div>
-  </form>
-);
+    </form>
+  );
+};
 
 const FactRow: FC<{
   fact: ResumeFact;
@@ -226,29 +250,47 @@ const DossierPage: FC<{
         <form method="post" action="/dossier/identity" class="stack">
           <CsrfField token={props.csrfToken} />
           <div class="field-row">
-            <div>
-              <label>Name</label>
-              <input type="text" name="name" value={props.identity?.name ?? ""} required />
-            </div>
-            <div>
-              <label>Email</label>
-              <input type="text" name="email" value={props.identity?.email ?? ""} />
-            </div>
+            <Field label="Name" for="identity-name">
+              <input
+                id="identity-name"
+                type="text"
+                name="name"
+                value={props.identity?.name ?? ""}
+                required
+              />
+            </Field>
+            <Field label="Email" for="identity-email">
+              <input
+                id="identity-email"
+                type="text"
+                name="email"
+                value={props.identity?.email ?? ""}
+              />
+            </Field>
           </div>
           <div class="field-row">
-            <div>
-              <label>Phone</label>
-              <input type="text" name="phone" value={props.identity?.phone ?? ""} />
-            </div>
-            <div>
-              <label>Location</label>
-              <input type="text" name="location" value={props.identity?.location ?? ""} />
-            </div>
+            <Field label="Phone" for="identity-phone">
+              <input
+                id="identity-phone"
+                type="text"
+                name="phone"
+                value={props.identity?.phone ?? ""}
+              />
+            </Field>
+            <Field label="Location" for="identity-location">
+              <input
+                id="identity-location"
+                type="text"
+                name="location"
+                value={props.identity?.location ?? ""}
+              />
+            </Field>
           </div>
-          <div>
-            <label>Links (one per line)</label>
-            <textarea name="links" rows={2}>{props.identity?.links.join("\n") ?? ""}</textarea>
-          </div>
+          <Field wide label="Links" for="identity-links" hint="One per line.">
+            <textarea id="identity-links" name="links" rows={2}>
+              {props.identity?.links.join("\n") ?? ""}
+            </textarea>
+          </Field>
           <div class="row">
             <button type="submit" class="primary">Save identity</button>
           </div>

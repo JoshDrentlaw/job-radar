@@ -11,7 +11,7 @@
 import { type Context, Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, formatDateTime, Notice, relativeAge } from "@web/components.tsx";
+import { CsrfField, Field, formatDateTime, Notice, relativeAge } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asFactId, asPostingId, asVariantId, type FactId, type VariantId } from "@platform/ids.ts";
 import {
@@ -109,14 +109,24 @@ const VariantsPage: FC<{
       <form method="post" action="/dossier/variants" class="stack">
         <CsrfField token={props.csrfToken} />
         <div class="field-row">
-          <div>
-            <label>Name</label>
-            <input type="text" name="name" required maxlength={80} placeholder="backend-heavy" />
-          </div>
-          <div>
-            <label>Target posting id (optional)</label>
-            <input type="text" name="target_posting_id" placeholder="greenhouse:acme:12345" />
-          </div>
+          <Field label="Name" for="variant-name">
+            <input
+              id="variant-name"
+              type="text"
+              name="name"
+              required
+              maxlength={80}
+              placeholder="backend-heavy"
+            />
+          </Field>
+          <Field label="Target posting id" for="variant-target" hint="Optional.">
+            <input
+              id="variant-target"
+              type="text"
+              name="target_posting_id"
+              placeholder="greenhouse:acme:12345"
+            />
+          </Field>
         </div>
         <div class="row">
           <button type="submit" class="primary">Create variant</button>

@@ -10,7 +10,14 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, formatDateTime, Notice, relativeAge, StatusChip } from "@web/components.tsx";
+import {
+  CsrfField,
+  Field,
+  formatDateTime,
+  Notice,
+  relativeAge,
+  StatusChip,
+} from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asBoardId, type BoardId, IdError, isPlatform, PLATFORMS } from "@platform/ids.ts";
 import type { Board, Snapshot } from "@domain/discovery/types.ts";
@@ -63,8 +70,7 @@ const BoardsPage: FC<BoardsPageProps> = (props) => (
       <form method="post" action="/boards" class="stack gap-above">
         <CsrfField token={props.csrfToken} />
         <div class="field-row">
-          <div>
-            <label for="platform">Platform</label>
+          <Field label="Platform" for="platform" hint="Three have adapters today.">
             <select id="platform" name="platform" required>
               {PLATFORMS.map((platform) => (
                 <option value={platform} disabled={!IMPLEMENTED.has(platform)}>
@@ -73,28 +79,29 @@ const BoardsPage: FC<BoardsPageProps> = (props) => (
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label for="slug">Board slug</label>
+          </Field>
+          <Field
+            label="Board slug"
+            for="slug"
+            hint="The identifier in the board's public feed URL."
+          >
             <input id="slug" name="slug" type="text" required placeholder="vercel" />
-            <p class="field-hint">The identifier in the board's public feed URL.</p>
-          </div>
-          <div>
-            <label for="companyName">Company name</label>
+          </Field>
+          <Field
+            label="Company name"
+            for="companyName"
+            hint="Yours to author. Feeds disagree with themselves about this."
+          >
             <input id="companyName" name="companyName" type="text" required placeholder="Vercel" />
-            <p class="field-hint">Yours to author. Feeds disagree with themselves about this.</p>
-          </div>
+          </Field>
         </div>
         <div class="field-row">
-          <div>
-            <label for="tags">Tags</label>
+          <Field label="Tags" for="tags" hint="Comma separated.">
             <input id="tags" name="tags" type="text" placeholder="infra, remote-friendly" />
-            <p class="field-hint">Comma separated.</p>
-          </div>
-          <div>
-            <label for="notes">Notes</label>
+          </Field>
+          <Field label="Notes" for="notes" hint="Why this board is worth watching.">
             <input id="notes" name="notes" type="text" />
-          </div>
+          </Field>
         </div>
         <div class="row">
           <button type="submit" class="primary">Save board</button>
@@ -162,7 +169,7 @@ const BoardsPage: FC<BoardsPageProps> = (props) => (
                         )}
                       </td>
                       <td>
-                        <div class="row">
+                        <div class="row table-actions">
                           <form
                             method="post"
                             action={`/boards/${encoded}/fetch`}

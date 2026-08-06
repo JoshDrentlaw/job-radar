@@ -118,10 +118,18 @@ body {
   text-underline-offset: 0.15em;
 }
 
+/*
+ * h5 and h6 are here because rendered markdown reaches them: a facet's `###`
+ * lands on an h5 once the document-outline offset is applied. Left to the user
+ * agent they arrive with their own margins and a smaller size than the body
+ * text, which is how a subheading ends up looking like a footnote.
+ */
 h1,
 h2,
 h3,
-h4 {
+h4,
+h5,
+h6 {
   margin: 0;
   line-height: 1.2;
   font-weight: 620;
@@ -137,8 +145,13 @@ h2 {
 h3 {
   font-size: var(--step-1);
 }
-h4 {
+h4,
+h5,
+h6 {
   font-size: var(--step-0);
+}
+h6 {
+  color: var(--ink-muted);
 }
 
 p {
@@ -354,6 +367,17 @@ table {
   }
 }
 
+/*
+ * A row's actions stay on one line. Left to wrap they stack, and because cells
+ * are top-aligned the whole row grows to the height of the tallest stack — a
+ * table of four boards was twice as tall as it needed to be. The table scrolls
+ * before these buttons break.
+ */
+.table-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
 /* -------------------------------------------------- asserted vs derived --- */
 
 /*
@@ -451,6 +475,16 @@ table {
   &.muted {
     opacity: 0.75;
   }
+
+  /* A chip that is a link is still a chip, not a run of underlined text. */
+  &:any-link {
+    text-decoration: none;
+
+    &:hover {
+      border-color: currentColor;
+      filter: brightness(1.15);
+    }
+  }
 }
 
 .tag-list {
@@ -483,9 +517,12 @@ label {
   margin-top: var(--space-3xs);
 }
 
-input[type="text"],
-input[type="search"],
-input[type="password"],
+/*
+ * Every text-entry control, listed by what it is rather than by type, because
+ * the previous list missed `month` and `number` — and a date field half the
+ * width of the one beside it is exactly the misalignment this pass is about.
+ */
+input:not([type="checkbox"], [type="radio"], [type="file"], [type="submit"], [type="hidden"]),
 select,
 textarea {
   width: 100%;
@@ -510,11 +547,68 @@ textarea {
   line-height: 1.5;
 }
 
+/*
+ * The field standard (see the `Field` component).
+ *
+ * A row of fields is three horizontal bands — labels, controls, hints — and all
+ * three have to line up independently. Bottom-aligning the row cannot do that:
+ * a field carrying a hint is taller, so its control gets pushed up and the row
+ * turns into masonry. Each `.field` therefore spans three rows of the parent
+ * grid and adopts them with `subgrid`, which makes the bands shared rather than
+ * per-field. A label that wraps to two lines now moves every control in the row
+ * together, instead of only its own.
+ *
+ * Row gap is deliberately tight — it is the label-to-control gap. Separation
+ * between wrapped rows comes from the field's own bottom padding, which sizes
+ * the last band, because a subgrid cannot have two different row gaps.
+ */
 .field-row {
   display: grid;
-  gap: var(--space-s);
+  column-gap: var(--space-s);
+  row-gap: var(--space-3xs);
   grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
-  align-items: end;
+  align-items: start;
+}
+
+.field {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+  padding-block-end: var(--space-xs);
+
+  & > label {
+    grid-row: 1;
+    align-self: end;
+    margin-bottom: 0;
+  }
+
+  /* A checkbox is its own label, so it belongs in the control band. */
+  & > .field-control,
+  & > .checkbox {
+    grid-row: 2;
+  }
+
+  & > .field-hint {
+    grid-row: 3;
+    align-self: start;
+  }
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+/*
+ * Without subgrid the bands cannot be shared, so fall back to top alignment —
+ * labels and controls still line up as long as no label wraps, which is a great
+ * deal better than bottom-aligning them.
+ */
+@supports not (grid-template-rows: subgrid) {
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+  }
 }
 
 .checkbox {
@@ -655,7 +749,6 @@ button,
 
 .posting-body {
   max-width: var(--measure);
-  white-space: pre-wrap;
   overflow-wrap: break-word;
   font-size: var(--step-0);
   line-height: 1.6;
@@ -764,23 +857,6 @@ textarea.editor {
   min-height: 16lh;
   line-height: 1.6;
   background: var(--bg-raised);
-}
-
-input[type="number"] {
-  width: 100%;
-  font: inherit;
-  font-size: var(--step-0);
-  color: var(--ink);
-  background: var(--bg);
-  border: var(--border-width) solid var(--rule-strong);
-  border-radius: var(--radius-s);
-  padding: var(--space-xs) var(--space-s);
-
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-    border-color: var(--accent);
-  }
 }
 
 .danger-text {
@@ -1102,5 +1178,301 @@ input[type="number"] {
 
   & li.urgent {
     border-inline-start-color: var(--warn);
+  }
+}
+
+/* --------------------------------------------------- rendered markdown ---- */
+
+/*
+ * The output of `markdown.tsx`. Three kinds of text in this application are
+ * markdown — profile facets, posting descriptions converted from the feed's
+ * HTML, and application notes — and all three used to render as their own
+ * source. Styling stays close to the body text: this is someone's prose, not a
+ * document viewer.
+ */
+.prose {
+  max-width: var(--measure);
+  line-height: 1.6;
+  overflow-wrap: break-word;
+
+  /*
+   * Every reset below is wrapped in `:where()` so it contributes no
+   * specificity. That is load-bearing: the vertical rhythm is one rule —
+   * `> * + *` — and a plain `.prose ul { margin: 0 }` would outrank it and
+   * silently delete the space above every list.
+   */
+  & :where(ul, ol) {
+    margin: 0;
+    padding-inline-start: var(--space-l);
+  }
+
+  & :where(li) + :where(li) {
+    margin-block-start: var(--space-2xs);
+  }
+
+  /* A list item's own paragraph is the item, not a block inside it. */
+  & :where(li > p) {
+    margin: 0;
+  }
+
+  & :where(li) > :where(ul, ol) {
+    margin-block-start: var(--space-2xs);
+  }
+
+  & :where(blockquote) {
+    margin: 0;
+    padding-inline-start: var(--space-m);
+    border-inline-start: 3px solid var(--rule-strong);
+    color: var(--ink-muted);
+  }
+
+  & :where(pre) {
+    margin: 0;
+    padding: var(--space-s);
+    background: var(--bg-sunken);
+    border-radius: var(--radius-s);
+    overflow-x: auto;
+  }
+
+  & :where(code) {
+    background: var(--bg-sunken);
+    border-radius: 3px;
+    padding: 0.1em 0.3em;
+  }
+
+  & :where(pre code) {
+    background: none;
+    padding: 0;
+  }
+
+  & :where(hr) {
+    margin: 0;
+    border: none;
+    border-top: var(--border-width) solid var(--rule);
+  }
+
+  & :where(s) {
+    color: var(--ink-faint);
+  }
+
+  /* The rhythm, applied last so it wins over the resets above. */
+  & > * + * {
+    margin-block-start: var(--space-s);
+  }
+
+  & > :is(h1, h2, h3, h4, h5, h6) + * {
+    margin-block-start: var(--space-2xs);
+  }
+
+  & > * + :is(h1, h2, h3, h4, h5, h6) {
+    margin-block-start: var(--space-m);
+  }
+
+  & > :first-child {
+    margin-block-start: 0;
+  }
+}
+
+/*
+ * Long prose in a card gets a ceiling rather than the whole page. The sunken
+ * surface is the tell: it is the same treatment a posting description gets, so
+ * a clipped last line reads as the edge of a viewport rather than the end of
+ * the text.
+ */
+.prose-clamp {
+  max-height: 22rem;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  max-width: none;
+  padding: var(--space-s) var(--space-m);
+  background: var(--bg-sunken);
+  border-radius: var(--radius-s);
+
+  & > * {
+    max-width: var(--measure);
+  }
+}
+
+/* A panel that opens. Used where a page would otherwise be a wall of forms. */
+details.disclosure {
+  & > summary {
+    cursor: pointer;
+    font-weight: 620;
+    color: var(--ink);
+  }
+
+  &[open] > summary {
+    margin-block-end: var(--space-s);
+  }
+}
+
+details.panel > summary {
+  font-size: var(--step-1);
+}
+
+/* One authored facet: what it says, with the editor folded away beneath it. */
+.facet-card > header {
+  align-items: center;
+}
+
+.facet-index {
+  font-size: var(--step--1);
+}
+
+/* ------------------------------------------------------- small screens ---- */
+
+/*
+ * The mobile pass. Nothing here is a separate layout — every page is a single
+ * column already — so this is about the four things that actually break on a
+ * phone: a twelve-item nav that wrapped into four lines, tables squeezed until
+ * every cell was two characters wide, tap targets sized for a mouse, and iOS
+ * zooming the viewport whenever a sub-16px input takes focus.
+ */
+
+/*
+ * Safari zooms the page when a focused control's text is under 16px, and never
+ * zooms back. The floor applies to the control only, so the type scale is
+ * unchanged everywhere else.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, var(--step-0));
+  }
+
+  /* 44px: the smallest target that is reliably hittable with a thumb. */
+  button,
+  .button,
+  details > summary {
+    min-height: 2.75rem;
+  }
+
+  button,
+  .button {
+    justify-content: center;
+  }
+
+  .masthead nav a {
+    padding-block: var(--space-xs);
+  }
+}
+
+/*
+ * The nav becomes one horizontally scrollable strip. Twelve destinations do not
+ * fit on a phone in any arrangement, and a scroll strip keeps them all one tap
+ * away — no disclosure to open, and no JavaScript, which this application does
+ * not have.
+ */
+@media (width < 52rem) {
+  .masthead .masthead-inner {
+    padding-inline: var(--space-s);
+    gap: var(--space-xs) var(--space-m);
+    align-items: center;
+  }
+
+  .masthead nav {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin-inline: calc(var(--space-s) * -1);
+    padding-inline: var(--space-s);
+    margin-inline-end: calc(var(--space-s) * -1);
+  }
+
+  .masthead nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .masthead nav a {
+    white-space: nowrap;
+  }
+
+  .masthead .inline-form {
+    margin-inline-start: auto;
+  }
+}
+
+@media (width < 40rem) {
+  main {
+    padding-inline: var(--space-s);
+    gap: var(--space-m);
+  }
+
+  .panel {
+    padding: var(--space-s);
+  }
+
+  /* The bleed has to match the padding it is cancelling. */
+  .table-scroll {
+    margin-inline: calc(var(--space-s) * -1);
+    padding-inline: var(--space-s);
+  }
+
+  /*
+   * Natural column widths and a scroll, rather than a table crushed to fit.
+   * The cap keeps one long error message from making the table a metre wide.
+   */
+  .table-scroll table {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .table-scroll td {
+    max-width: 20rem;
+  }
+
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  }
+
+  /* A fact and its buttons stack; the buttons keep to the trailing edge. */
+  .fact-row {
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .fact-actions {
+    justify-content: flex-end;
+  }
+
+  .fact-indent {
+    margin-inline-start: var(--space-m);
+  }
+
+  .match-facets {
+    justify-content: start;
+  }
+
+  .filter-row select {
+    width: 100%;
+  }
+
+  .histogram {
+    height: 8rem;
+  }
+
+  .proposal-flagged {
+    margin-inline-start: calc(-1 * var(--space-s));
+    padding-inline-start: var(--space-s);
+  }
+
+  .posting-body {
+    padding: var(--space-s);
+  }
+}
+
+/* The submit button of a form is the one thing worth a full-width target. */
+@media (width < 34rem) {
+  form.stack > .row > button[type="submit"].primary {
+    flex: 1 1 100%;
   }
 }

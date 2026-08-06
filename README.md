@@ -18,6 +18,7 @@ is deliberately not here yet.
 | **M5 — Tailoring**      | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
 | **M6 — Pipeline + n8n** | Done. Applications with an append-only timeline, bearer-authenticated job routes, ghosting.   |
 | **M7 — Polish**         | Done. Passkeys, vocabulary-gap detection, a dashboard that knows what the app now does.       |
+| **M8 — Interface**      | Done. A field standard, rendered markdown, a profile page that scales, a mobile pass.         |
 
 ## Stack
 
@@ -374,6 +375,48 @@ lives on the page it governs.
 
 **Matches had no search** while `/postings` had one from M1, which made a long strong bucket hard to
 work through.
+
+### The interface pass (M8)
+
+**A form field is now one thing, not four loose elements.** `.field-row` used to be a grid of bare
+`<div>`s bottom-aligned to each other, so a field carrying a hint was taller than one that did not
+and the row settled into masonry — three inputs in a row sitting at three different heights. Row
+alignment cannot fix that, because a label, a control and a hint are three bands that have to line
+up independently. `Field` emits exactly those three bands and the CSS places them on a **subgrid**,
+so the bands are shared across the row: every label on one line, every control on the next, hints
+hanging below without moving anything above them. A label that wraps now moves every control in the
+row together instead of only its own. There is a `@supports not` fallback to top alignment, which is
+what the layout should have been doing all along.
+
+**Markdown renders.** Three kinds of text in this application are markdown — profile facets, posting
+descriptions converted from the feed's HTML, and application notes — and all three were displayed as
+their own source. `src/web/markdown.tsx` is a small hand-written renderer whose important property
+is structural rather than typographic: **it produces a JSX tree, never an HTML string**. There is no
+`dangerouslySetInnerHTML` anywhere in the application and no way to add one through it, so every
+character still leaves through hono's escaping. A facet containing `<script>` renders the seven
+characters `<script>`. Raw HTML in the source is deliberately not passed through, link destinations
+are restricted to `http`, `https`, `mailto` and same-origin paths — a `javascript:` href renders its
+label as plain text — and images become links, because the CSP allows `img-src 'self' data:` and a
+remote image was never going to load. 18 unit tests, most of them about the refusals.
+
+**The profile page stopped punishing you for using it.** Every facet was an open editor, so the page
+was a wall of textareas and adding a facet pushed the "new facet" form further down — the form to
+add the next one moved every time you added one. The add form is now a disclosure pinned to the top,
+each facet is a card showing its rendered text with the editor folded away, and an index of anchors
+appears once there is more than one.
+
+**The mobile pass.** Every page is a single column already, so this was four specific things: a
+twelve-item nav that wrapped into four lines is now one horizontally scrollable strip (no disclosure
+to open, and no JavaScript, which this application does not have); tables get natural column widths
+and scroll rather than being crushed to fit; tap targets get a 44px floor on coarse pointers; and
+controls get a 16px font floor, because Safari zooms the viewport when a focused input's text is
+smaller than that and never zooms back.
+
+**Three bugs the pass surfaced.** `h5` and `h6` were never styled, so a facet's `###` arrived with
+user-agent margins and a size smaller than the body text. The prose resets outranked the vertical
+rhythm rule, silently deleting the space above every list — fixed by wrapping the resets in
+`:where()` so they carry no specificity. And a facet's status chip computed its colour and its words
+separately, which is how "not embedded yet" ended up wearing the green that means "embedded".
 
 ## Open questions from the brief
 

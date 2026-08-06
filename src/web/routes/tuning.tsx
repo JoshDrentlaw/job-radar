@@ -12,7 +12,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, Metric, Notice } from "@web/components.tsx";
+import { CsrfField, Field, Metric, Notice } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import {
   BUCKET_THRESHOLDS_SETTING,
@@ -143,8 +143,7 @@ const TuningPage: FC<{
         <form method="post" action="/tuning/thresholds" class="stack">
           <CsrfField token={props.csrfToken} />
           <div class="field-row">
-            <div>
-              <label for="strong">Strong at or above</label>
+            <Field label="Strong at or above" for="strong">
               <input
                 id="strong"
                 name="strong"
@@ -155,9 +154,12 @@ const TuningPage: FC<{
                 value={String(props.thresholds.strong)}
                 required
               />
-            </div>
-            <div>
-              <label for="plausible">Plausible at or above</label>
+            </Field>
+            <Field
+              label="Plausible at or above"
+              for="plausible"
+              hint="Anything below this is weak."
+            >
               <input
                 id="plausible"
                 name="plausible"
@@ -168,11 +170,10 @@ const TuningPage: FC<{
                 value={String(props.thresholds.plausible)}
                 required
               />
-            </div>
+            </Field>
           </div>
           <p class="field-hint">
-            Anything below the plausible threshold is weak. Changing thresholds re-buckets existing
-            scores immediately; nothing is re-scored.
+            Changing thresholds re-buckets existing scores immediately; nothing is re-scored.
           </p>
           <div class="row">
             <button type="submit" class="primary">Save thresholds</button>
