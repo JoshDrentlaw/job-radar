@@ -202,7 +202,7 @@ systemctl status job-radar --no-pager
 
 **Migrations run at boot.** A single-user app on one droplet has no rolling deploy to coordinate
 with, and a schema that silently lags the code is the worse failure. The first start applies all
-nine.
+ten.
 
 Check it came up:
 
@@ -439,8 +439,8 @@ systemctl enable --now job-radar-deploy.timer
 watching origin/main
   deployed: db830bbd
   available: ef11bafd
-  checks: 2/2 green
-deploying ef11bafd (2/2 checks green)
+  checks: 2/2 conclusive, none failing
+deploying ef11bafd (2 checks, none failing)
 ```
 
 …or, when there is nothing to do, `up to date — nothing to deploy`. Without `-v` — which is how the
@@ -449,11 +449,24 @@ timer runs it — a no-op prints nothing and a real deploy prints everything.
 It does three things a bare `git pull && systemctl restart` does not:
 
 - **Deploys only what CI has gone green on.** It asks the GitHub checks API about the target commit
-  and holds if any check failed or none has reported yet. A timer that takes whatever is on `main`
-  will eventually take a broken commit at three in the morning.
+  and holds if anything is still running, if any check failed, or if none has reported yet. A timer
+  that takes whatever is on `main` will eventually take a broken commit at three in the morning.
 - **Dumps the database first**, into `/var/backups/job-radar/pre-deploy-*.dump`, because the restart
   applies migrations and migrations do not come back.
 - **Checks the app answers afterwards** and logs loudly if it does not.
+
+Three details of the check gate that only matter once they bite:
+
+- **`skipped` and `neutral` count as passing.** Only `failure`, `cancelled` and `timed_out` hold a
+  deploy. Counting strictly-`success` against the total meant one conditional job whose `if:`
+  evaluated false would stop deploys permanently, with the reason in a journal line nobody reads.
+- **It refuses to judge a partial list.** The checks API pages at 30; the script asks for 100 and
+  dies loudly rather than deciding if there are somehow more than that.
+- **It parses `/etc/job-radar.env` rather than sourcing it**, reading only `PORT` and
+  `DATABASE_URL`. Sourcing let anything in that file redefine the deploy's own settings, and it
+  truncated any value containing a space — which the database password may well. The database to
+  dump is derived from `DATABASE_URL`; set `PGDATABASE` to override if your password contains a
+  literal `/`.
 
 It deliberately does **not** roll back. Once a migration is applied, checking out the previous
 commit does not undo it, and a script that pretended otherwise would turn one broken deploy into two

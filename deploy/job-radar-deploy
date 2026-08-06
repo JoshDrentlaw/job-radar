@@ -53,12 +53,39 @@ esac
 
 command -v jq >/dev/null || die "jq is required (apt-get install -y jq)"
 
-# The health check needs the port the app was actually configured with.
-set -a
-# shellcheck disable=SC1090
-. "$ENV_FILE"
-set +a
-HEALTH="http://127.0.0.1:${PORT:-8000}/healthz"
+# Read what the deploy needs out of the app's env file by *parsing* it, one name
+# at a time. This used to `. "$ENV_FILE"`, which had two problems:
+#
+#   1. Anything added to /etc/job-radar.env later could silently redefine the
+#      settings above — a `SERVICE=` or `BACKUP_DIR=` line in there would
+#      quietly retarget the deploy, and the failure would look like anything
+#      but its cause.
+#   2. systemd's EnvironmentFile takes the rest of the line as the value, but
+#      `.` is shell and needs quoting. A database password containing a space —
+#      which the runbook explicitly suggests — parses fine for the app and
+#      truncates here, so the two disagree about the connection string.
+#
+# Parsing also means a value can never be executed, which sourcing could not
+# promise. Last assignment wins, matching systemd.
+read_env() {
+  sed -n "s/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}$1=//p" "$ENV_FILE" |
+    tail -n 1 | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
+}
+
+APP_PORT=$(read_env PORT)
+APP_DATABASE_URL=$(read_env DATABASE_URL)
+HEALTH="http://127.0.0.1:${APP_PORT:-8000}/healthz"
+
+# The database to dump comes from the URL the app actually connects with, not
+# from a name hardcoded here. (A password containing a literal `/` would defeat
+# this; use one that does not, or set PGDATABASE in the environment.)
+db_name() {
+  local rest=${APP_DATABASE_URL#*://} # strip scheme
+  rest=${rest#*/}                     # strip credentials, host and port
+  rest=${rest%%\?*}                   # strip query parameters
+  printf '%s' "${rest:-jobradar}"
+}
+DATABASE=${PGDATABASE:-$(db_name)}
 
 cd "$REPO"
 
@@ -77,29 +104,56 @@ fi
 
 # Only deploy a commit CI has approved. A public repository needs no token for
 # this; if the checks have not finished yet, we simply try again next tick.
+#
+# per_page=100 because the endpoint defaults to 30: `total_count` would still be
+# the true total while `.check_runs[]` held only the first page, and counting
+# one against the other would hold forever. Past 100 we refuse to decide rather
+# than decide on a partial view.
 checks=$(curl -fsS -H 'Accept: application/vnd.github+json' \
-  "https://api.github.com/repos/$REPO_SLUG/commits/$target/check-runs") ||
+  "https://api.github.com/repos/$REPO_SLUG/commits/$target/check-runs?per_page=100") ||
   die "could not reach the GitHub checks API"
 
 total=$(jq -r '.total_count' <<<"$checks")
-green=$(jq -r '[.check_runs[] | select(.status == "completed" and .conclusion == "success")] | length' <<<"$checks")
+seen=$(jq -r '.check_runs | length' <<<"$checks")
 
 if [ "$total" -eq 0 ]; then
   log "holding at ${current:0:8}: no checks reported for ${target:0:8} yet"
   exit 0
 fi
-if [ "$total" -ne "$green" ]; then
-  log "holding at ${current:0:8}: ${target:0:8} has $green/$total checks green"
+if [ "$total" -gt "$seen" ]; then
+  die "${target:0:8} has $total checks but the API returned $seen; refusing to judge a partial list"
+fi
+
+# A check that ran and passed, a check that was skipped, and a check that
+# reported nothing conclusive are all "not a reason to hold". Counting only
+# `success` meant a single conditional job whose `if:` evaluated false — which
+# GitHub reports as `skipped` — would stop deploys permanently, with the reason
+# buried in a journal line nobody reads.
+pending=$(jq -r '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks")
+bad=$(jq -r '
+  [ .check_runs[]
+    | select(.status == "completed")
+    | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")
+    | "\(.name) (\(.conclusion))"
+  ] | join(", ")' <<<"$checks")
+
+if [ "$pending" -gt 0 ]; then
+  say "holding: $pending of $total checks still running"
+  exit 0 # Silent without -v; the next tick will look again.
+fi
+if [ -n "$bad" ]; then
+  log "holding at ${current:0:8}: ${target:0:8} has failing checks — $bad"
   exit 0
 fi
-say "  checks: $green/$total green"
+say "  checks: $total/$total conclusive, none failing"
 
-log "deploying ${target:0:8} ($green/$total checks green)"
+log "deploying ${target:0:8} ($total checks, none failing)"
 
 # Restarting applies migrations, and they are forward-only.
 mkdir -p "$BACKUP_DIR"
 backup="$BACKUP_DIR/pre-deploy-$(date -u +%Y%m%dT%H%M%SZ)-${target:0:8}.dump"
-sudo -u postgres pg_dump -Fc jobradar >"$backup" || die "pg_dump failed; not deploying"
+sudo -u postgres pg_dump -Fc "$DATABASE" >"$backup" ||
+  die "pg_dump of '$DATABASE' failed; not deploying"
 find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete
 
 # --ff-only, so a repository someone has edited by hand stops here rather than
