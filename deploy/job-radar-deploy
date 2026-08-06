@@ -210,9 +210,39 @@ git_as merge --ff-only "origin/$BRANCH" ||
 #
 # Only the units are a restart-of-the-timer concern; a changed script is picked
 # up by the next tick on its own.
+# Never install a file the system would refuse to run.
+#
+# Not theoretical: a hand-installed unit file once turned out to be a copy of
+# the *service* written to the *timer*'s path. The result had no [Timer]
+# section, so systemd loaded it as `bad-setting` with no next elapse and the
+# timer simply stopped — silently, for hours, with `systemctl status` the only
+# place that said so and nothing in the journal at all. Now that this script
+# installs unit files on its own, it must not be able to do the same thing
+# faster and unattended.
+#
+# A failure skips that one file and lets the rest of the deploy continue: a
+# stale unit that works beats a fresh one that does not, and the application
+# itself is unaffected either way.
+check_installable() {
+  local src="$1" why status
+  case "$src" in
+    *.service | *.timer)
+      command -v systemd-analyze >/dev/null 2>&1 || return 0
+      if why=$(systemd-analyze verify "$src" 2>&1); then status=0; else status=$?; fi
+      ;;
+    *)
+      if why=$(bash -n "$src" 2>&1); then status=0; else status=$?; fi
+      ;;
+  esac
+  [ "$status" -eq 0 ] && return 0
+  log "refusing to install $src — it does not pass its own syntax check: ${why:-no detail}"
+  return 1
+}
+
 self_install() {
   local src="$1" dest="$2" mode="$3"
   cmp -s "$src" "$dest" && return 1
+  check_installable "$src" || return 1
   local tmp
   tmp=$(mktemp "$(dirname "$dest")/.job-radar-deploy.XXXXXX") || return 1
   if ! install -m "$mode" "$src" "$tmp"; then

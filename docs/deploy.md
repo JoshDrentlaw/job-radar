@@ -422,10 +422,22 @@ the blast radius of that key is the whole droplet, including anything else it ho
 
 ```bash
 apt-get install -y jq
-install -m 755 /opt/job-radar/deploy/job-radar-deploy /usr/local/bin/
-install -m 644 /opt/job-radar/deploy/job-radar-deploy.{service,timer} /etc/systemd/system/
+
+# Each destination written out in full, deliberately. A brace expansion here
+# once put the *service* file at the *timer*'s path; the result had no [Timer]
+# section, so the timer loaded as `bad-setting`, scheduled nothing, and stopped
+# firing without a single line in the journal.
+install -m 755 /opt/job-radar/deploy/job-radar-deploy /usr/local/bin/job-radar-deploy
+install -m 644 /opt/job-radar/deploy/job-radar-deploy.service /etc/systemd/system/job-radar-deploy.service
+install -m 644 /opt/job-radar/deploy/job-radar-deploy.timer /etc/systemd/system/job-radar-deploy.timer
+
+# Check before trusting. Both are silent when the units are sound.
+systemd-analyze verify /etc/systemd/system/job-radar-deploy.timer
+systemd-analyze verify /etc/systemd/system/job-radar-deploy.service
+
 systemctl daemon-reload
 systemctl enable --now job-radar-deploy.timer
+systemctl list-timers job-radar-deploy.timer --no-pager   # NEXT must show a real time
 
 # Watch one cycle before trusting it. Run the script directly with -v rather
 # than `systemctl start`: the timer's job is to be silent when there is nothing
@@ -490,6 +502,14 @@ git refused the checkout as **dubious ownership**, and the timer failed on every
 the fix already merged and sitting one directory away. Nothing was alerting on it and the box looked
 fine. A deploy tool that cannot deploy itself is the one component with no safety net.
 
+**Nothing is installed that the system would refuse to run.** A unit file is checked with
+`systemd-analyze verify` and the script with `bash -n` before it is swapped in; a file that fails is
+skipped, with the reason logged, and the rest of the deploy carries on. A stale unit that works
+beats a fresh one that does not. This exists because a unit file was once installed by hand that
+turned out to be the _service_ written to the _timer_'s path — no `[Timer]` section, so no next
+elapse, so the timer stopped dead with `bad-setting` in `systemctl status` and nothing in the
+journal. Now that the deploy writes unit files unattended, it must not be able to do that faster.
+
 The copy is done by writing a temp file beside the target and renaming it, never by writing the
 target in place. `install` and `cp` both mutate the destination inode, and bash reads a running
 script incrementally by byte offset; rewriting this file mid-run leaves the interpreter's position
@@ -499,17 +519,50 @@ afterwards. `rename()` sidesteps the question: the running process keeps the old
 
 ## When something is wrong
 
-| Symptom                                       | Look at                                                                                      |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Service will not start                        | `journalctl -u job-radar -n 100` — config errors are explicit and name the variable          |
-| `APP_BASE_URL must be https:// in production` | Exactly what it says; TLS first, then flip `APP_ENV`                                         |
-| Signing in does nothing, no error             | `Secure` cookies over plain HTTP. Finish the certbot step                                    |
-| Passkey button never appears                  | The origin is not secure, or the CSP is being overridden by nginx                            |
-| Migration fails on `0004`                     | `postgresql-16-pgvector` is not installed                                                    |
-| Boards failing                                | The **Coverage** page names each one and why. That is the ledger's job                       |
-| Matching does nothing                         | No `VOYAGE_API_KEY`. The match pages say so rather than erroring                             |
-| `detected dubious ownership in repository`    | See below — almost always a stale `/usr/local/bin/job-radar-deploy`                          |
-| Deploy says the repo is on the wrong branch   | `sudo -u jobradar git -C /opt/job-radar checkout main`. Never write to that repo as yourself |
+| Symptom                                       | Look at                                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Service will not start                        | `journalctl -u job-radar -n 100` — config errors are explicit and name the variable              |
+| `APP_BASE_URL must be https:// in production` | Exactly what it says; TLS first, then flip `APP_ENV`                                             |
+| Signing in does nothing, no error             | `Secure` cookies over plain HTTP. Finish the certbot step                                        |
+| Passkey button never appears                  | The origin is not secure, or the CSP is being overridden by nginx                                |
+| Migration fails on `0004`                     | `postgresql-16-pgvector` is not installed                                                        |
+| Boards failing                                | The **Coverage** page names each one and why. That is the ledger's job                           |
+| Matching does nothing                         | No `VOYAGE_API_KEY`. The match pages say so rather than erroring                                 |
+| `detected dubious ownership in repository`    | See below — almost always a stale `/usr/local/bin/job-radar-deploy`                              |
+| Deploy says the repo is on the wrong branch   | `sudo -u jobradar git -C /opt/job-radar checkout main`. Never write to that repo as yourself     |
+| Timer stopped firing, nothing in the journal  | `systemctl status job-radar-deploy.timer`. `Trigger: n/a` means it scheduled nothing — see below |
+
+### The timer stops firing and the journal says nothing
+
+A timer that scheduled nothing produces no log line at all — the absence _is_ the symptom, and
+`journalctl -n 20` will happily keep showing you hours-old history as if it were current. Check the
+gap between the last entry and now before reading the entries themselves.
+
+```bash
+systemctl status job-radar-deploy.timer --no-pager | head -6
+systemctl list-timers job-radar-deploy.timer --all --no-pager
+```
+
+`Trigger: n/a` with `Active: active (elapsed)` means systemd has no next elapse. Almost always the
+unit file:
+
+```bash
+sudo systemd-analyze verify /etc/systemd/system/job-radar-deploy.timer
+head -4 /etc/systemd/system/job-radar-deploy.timer      # must be [Unit] then [Timer]
+```
+
+`Timer unit lacks value setting. Refusing.` means there is no usable `[Timer]` section — usually
+because the file is a copy of something else. Reinstall it from the repository with an explicit
+destination, and note that **`daemon-reload` alone will not reschedule it**; the timer needs a
+restart:
+
+```bash
+sudo install -m 644 /opt/job-radar/deploy/job-radar-deploy.timer /etc/systemd/system/job-radar-deploy.timer
+sudo systemd-analyze verify /etc/systemd/system/job-radar-deploy.timer
+sudo systemctl daemon-reload
+sudo systemctl restart job-radar-deploy.timer
+systemctl list-timers job-radar-deploy.timer --no-pager
+```
 
 ### `detected dubious ownership in repository at '/opt/job-radar'`
 
