@@ -15,6 +15,7 @@ import type {
   PostingRepo,
   SnapshotRepo,
 } from "@domain/discovery/types.ts";
+import type { BoardCandidateRepo, BoardProbe } from "@domain/discovery/resolve.ts";
 import type {
   ChunkRepo,
   Embedder,
@@ -35,6 +36,9 @@ import type { UserRepo } from "@auth/types.ts";
 
 export interface Services {
   readonly boards: BoardRegistry;
+  /** The accumulated catalogue of "is there a board at this name?" answers. */
+  readonly boardCandidates: BoardCandidateRepo;
+  readonly probeBoard: BoardProbe;
   readonly postings: PostingRepo;
   readonly snapshots: SnapshotRepo;
   readonly runs: CollectionRunRepo;

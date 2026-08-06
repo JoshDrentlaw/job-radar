@@ -1181,6 +1181,46 @@ textarea.editor {
   }
 }
 
+/* ------------------------------------------------------ board lookup ------ */
+
+/* One platform's answer about one slug. */
+.candidate {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: start;
+  gap: var(--space-s);
+  padding-block: var(--space-s);
+
+  & + .candidate {
+    border-top: var(--border-width) solid var(--rule);
+  }
+}
+
+.candidate-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.candidate-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-weight: 620;
+}
+
+/*
+ * Sample titles need a separator: run together on one line they read as a
+ * single long title rather than three short ones, which is the opposite of
+ * what they are there to show.
+ */
+.candidate-samples > * + *::before {
+  content: "·";
+  margin-inline-end: var(--space-xs);
+  color: var(--ink-faint);
+}
+
 /* --------------------------------------------------- rendered markdown ---- */
 
 /*

@@ -19,6 +19,7 @@ is deliberately not here yet.
 | **M6 — Pipeline + n8n** | Done. Applications with an append-only timeline, bearer-authenticated job routes, ghosting.   |
 | **M7 — Polish**         | Done. Passkeys, vocabulary-gap detection, a dashboard that knows what the app now does.       |
 | **M8 — Interface**      | Done. A field standard, rendered markdown, a profile page that scales, a mobile pass.         |
+| **M9 — Board lookup**   | Done. Name a company, get its board. Slug guessing, cheap probes, an accumulating catalogue.  |
 
 ## Stack
 
@@ -48,7 +49,7 @@ deno task start               # http://127.0.0.1:8000
 **Deploying to a droplet:** [`docs/deploy.md`](docs/deploy.md).
 
 CI runs the same `check` and `test:unit` on every push, plus one thing that cannot be checked
-without a database: that all nine migrations apply to an empty Postgres 16 with pgvector, and that
+without a database: that all ten migrations apply to an empty Postgres 16 with pgvector, and that
 applying them twice is a no-op. `deno install --frozen` gates the lockfile, so a dependency that is
 merely _believed_ pinned fails the build.
 
@@ -417,6 +418,57 @@ user-agent margins and a size smaller than the body text. The prose resets outra
 rhythm rule, silently deleting the space above every list — fixed by wrapping the resets in
 `:where()` so they carry no specificity. And a facet's status chip computed its colour and its words
 separately, which is how "not embedded yet" ended up wearing the green that means "embedded".
+
+### Finding a board without knowing its slug (M9)
+
+Adding a board needed three things you had to already know: the platform, the exact slug, and
+whether the company was on an ATS this app can read at all. Get one wrong and the result was a 404
+on the boards page that could not distinguish a typo from a company that simply is not on
+Greenhouse. Since the registry is the denominator for every count in the application, a board that
+is annoying to add is a board that does not get added — friction here corrupts the data.
+
+**There is no catalogue to fetch, and that was checked rather than assumed.** None of the three
+platforms publishes a directory of its customers: the feeds exist so a company can build its own
+careers page, and enumerating every tenant is not a use case any of them serves. Third-party scraped
+lists exist and were rejected — taking one would break the rule that every adapter here was written
+against live data we fetched ourselves.
+
+**What all three do answer is "is there a board at this name?"** — 404 for no, 200 for yes, no
+authentication. Measured against the live endpoints before any code was written, because the cost of
+a probe is what decides whether speculative probing is defensible:
+
+| Platform   | Cheapest probe                              | Hit                                                | Miss  |
+| ---------- | ------------------------------------------- | -------------------------------------------------- | ----- |
+| Greenhouse | `GET /v1/boards/{slug}`                     | `200`, **28 bytes**, states the company's own name | `404` |
+| Lever      | `GET /v0/postings/{slug}?mode=json&limit=1` | `200`, ~10 KB against ~1 MB unlimited              | `404` |
+| Ashby      | `GET /posting-api/job-board/{slug}`         | the board                                          | `404` |
+
+So `/boards/find` guesses well and then asks. A company name becomes at most four candidate slugs —
+joined, hyphenated, first word, and the `…hq` variant that Ashby and Lever tenants often use, with
+diacritics folded and legal suffixes dropped — and each platform is asked about them in order. **A
+platform stops at its first hit**, and platforms run concurrently because the polite fetcher's
+one-request-per-second rule is per host. Pasting a careers-page URL skips the guessing entirely and
+asks exactly one question.
+
+A confirmed hit is then read by the platform's **real adapter**, so the posting count and sample
+titles shown come from the same code path that will collect the board for real. That makes the
+preview a rehearsal rather than a second opinion: if the adapter cannot parse the board, you find
+out before it joins the registry rather than in the coverage ledger a day later. Greenhouse's probe
+also states the company's own name, so the field the form describes as "yours to author" arrives
+pre-filled.
+
+Every answer is recorded in `discovery.board_candidates`, **misses as deliberately as hits**.
+"Spotify is not on Greenhouse" is a fact worth keeping, and re-deriving it on every lookup would
+spend a request on a feed somebody else pays for. A hit is reused for a day and a miss for a week —
+a company that moves onto Greenhouse next quarter has to be findable next quarter — and neither is a
+cliff, because the page shows the as-of time and offers to ask again.
+
+The distinction the whole thing turns on is **404 versus everything else**. A 404 is the platform
+answering. A timeout is not an answer, and recording it as one would put a wrong fact in the
+catalogue for a week, so the two are kept apart in the type, in the schema, and on the page.
+
+Still to do: bulk paste. Twenty company names is eighty requests per host, which is well past what
+belongs in a page load — it wants the job-route pattern the rest of the long work already uses.
 
 ## Open questions from the brief
 

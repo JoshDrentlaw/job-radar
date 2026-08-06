@@ -11,6 +11,7 @@ import type { Platform } from "@platform/ids.ts";
 import { migrateUp } from "@platform/migrate.ts";
 
 import { PostgresBoardRepo } from "@adapters/db/board-repo.ts";
+import { PostgresBoardCandidateRepo } from "@adapters/db/board-candidate-repo.ts";
 import { PostgresPostingRepo } from "@adapters/db/posting-repo.ts";
 import { PostgresSnapshotRepo } from "@adapters/db/snapshot-repo.ts";
 import { PostgresCollectionRunRepo } from "@adapters/db/collection-run-repo.ts";
@@ -33,6 +34,7 @@ import { expectedOriginFrom, PasskeyService } from "@auth/webauthn/service.ts";
 import { AnthropicLlmClient } from "@adapters/llm/anthropic.ts";
 import { VoyageEmbedder } from "@adapters/embedding/voyage.ts";
 import { buildUserAgent, PoliteFetcher } from "@adapters/ats/http.ts";
+import { AtsProber } from "@adapters/ats/probe.ts";
 import { GreenhouseSource } from "@adapters/ats/greenhouse.ts";
 import { LeverSource } from "@adapters/ats/lever.ts";
 import { AshbySource } from "@adapters/ats/ashby.ts";
@@ -53,6 +55,9 @@ const sql = createDb(config.databaseUrl);
 await migrateUp(sql, "./migrations", logger);
 
 const http = new PoliteFetcher({ userAgent: buildUserAgent(config.contactUrl) });
+// Shares the fetcher, so board lookups queue behind collection on the same host
+// rather than doubling the request rate against it.
+const prober = new AtsProber(http);
 
 /**
  * Platform to adapter. Platforms without an entry are not an error at startup —
@@ -87,6 +92,8 @@ if (llm === null) {
 
 const services: Services = {
   boards: new PostgresBoardRepo(sql),
+  boardCandidates: new PostgresBoardCandidateRepo(sql),
+  probeBoard: (platform, slug) => prober.probe(platform, slug),
   postings: new PostgresPostingRepo(sql),
   snapshots: new PostgresSnapshotRepo(sql),
   runs: new PostgresCollectionRunRepo(sql),
