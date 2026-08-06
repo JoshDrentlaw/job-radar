@@ -471,18 +471,70 @@ Three details of the check gate that only matter once they bite:
 It deliberately does **not** roll back. Once a migration is applied, checking out the previous
 commit does not undo it, and a script that pretended otherwise would turn one broken deploy into two
 problems. It also refuses to fast-forward a checkout that has been edited by hand, rather than
-merging over your changes.
+merging over your changes, and it refuses outright if the checkout is parked on some other branch —
+fast-forwarding `add-safe-dir` to `main` would leave production running main's code on a branch
+nobody expects.
 
 `journalctl -u job-radar-deploy` is the whole audit trail. Quiet ticks log nothing.
 
+### The deploy updates itself
+
+**The `install` commands above are the bootstrap, not the update path.** After a successful merge
+the script copies `deploy/job-radar-deploy` over `/usr/local/bin/job-radar-deploy` when the two
+differ, and does the same for the two unit files, running `systemctl daemon-reload` if either
+changed. The new script takes effect on the next tick; the one in flight finishes as itself.
+
+This exists because it went wrong exactly once, and expensively. The installed copy was four commits
+stale — from before every git call dropped privilege to `jobradar` — so `git rev-parse` ran as root,
+git refused the checkout as **dubious ownership**, and the timer failed on every tick for weeks with
+the fix already merged and sitting one directory away. Nothing was alerting on it and the box looked
+fine. A deploy tool that cannot deploy itself is the one component with no safety net.
+
+The copy is done by writing a temp file beside the target and renaming it, never by writing the
+target in place. `install` and `cp` both mutate the destination inode, and bash reads a running
+script incrementally by byte offset; rewriting this file mid-run leaves the interpreter's position
+pointing into text that is no longer what it parsed. Whether that actually breaks depends on
+buffering and how the sizes line up — a coin toss to rely on, and impossible to reproduce
+afterwards. `rename()` sidesteps the question: the running process keeps the old inode, untouched.
+
 ## When something is wrong
 
-| Symptom                                       | Look at                                                                             |
-| --------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Service will not start                        | `journalctl -u job-radar -n 100` — config errors are explicit and name the variable |
-| `APP_BASE_URL must be https:// in production` | Exactly what it says; TLS first, then flip `APP_ENV`                                |
-| Signing in does nothing, no error             | `Secure` cookies over plain HTTP. Finish the certbot step                           |
-| Passkey button never appears                  | The origin is not secure, or the CSP is being overridden by nginx                   |
-| Migration fails on `0004`                     | `postgresql-16-pgvector` is not installed                                           |
-| Boards failing                                | The **Coverage** page names each one and why. That is the ledger's job              |
-| Matching does nothing                         | No `VOYAGE_API_KEY`. The match pages say so rather than erroring                    |
+| Symptom                                       | Look at                                                                                      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Service will not start                        | `journalctl -u job-radar -n 100` — config errors are explicit and name the variable          |
+| `APP_BASE_URL must be https:// in production` | Exactly what it says; TLS first, then flip `APP_ENV`                                         |
+| Signing in does nothing, no error             | `Secure` cookies over plain HTTP. Finish the certbot step                                    |
+| Passkey button never appears                  | The origin is not secure, or the CSP is being overridden by nginx                            |
+| Migration fails on `0004`                     | `postgresql-16-pgvector` is not installed                                                    |
+| Boards failing                                | The **Coverage** page names each one and why. That is the ledger's job                       |
+| Matching does nothing                         | No `VOYAGE_API_KEY`. The match pages say so rather than erroring                             |
+| `detected dubious ownership in repository`    | See below — almost always a stale `/usr/local/bin/job-radar-deploy`                          |
+| Deploy says the repo is on the wrong branch   | `sudo -u jobradar git -C /opt/job-radar checkout main`. Never write to that repo as yourself |
+
+### `detected dubious ownership in repository at '/opt/job-radar'`
+
+Git refuses to operate on a repository owned by a different user than the one running it. In the
+deploy that should never happen, because every git call drops to `jobradar` — so seeing this means
+something is running git as the wrong user. In order of likelihood:
+
+1. **The installed script is stale.** Older copies ran `git rev-parse` as root. The giveaway is in
+   the journal: the `sudo` line for `git fetch` opens and closes cleanly, and then the _next_ git
+   call has no `sudo` line at all before it dies.
+
+   ```bash
+   diff /usr/local/bin/job-radar-deploy /opt/job-radar/deploy/job-radar-deploy
+   sudo install -m 755 /opt/job-radar/deploy/job-radar-deploy /usr/local/bin/
+   ```
+
+2. **The checkout is genuinely owned by someone else** — usually because a git command was run in it
+   as root or as your own account, which rewrites `.git` as that user.
+
+   ```bash
+   stat -c '%U:%G %n' /opt/job-radar /opt/job-radar/.git
+   sudo chown -R jobradar:jobradar /opt/job-radar
+   ```
+
+**Do not fix this with `git config --global --add safe.directory /opt/job-radar`.** As your own user
+it changes nothing about the deploy, which runs git as `jobradar`; as root it silences the warning
+that was correctly telling you the wrong user is writing to production's checkout. Adding it so you
+can _read_ the repo from your own shell is fine — just never write to it that way.
