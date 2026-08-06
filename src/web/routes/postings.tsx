@@ -13,7 +13,10 @@ import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
 import {
   Asserted,
+  CheckboxField,
   Derived,
+  Field,
+  FieldActions,
   FieldLegend,
   formatDate,
   formatDateTime,
@@ -21,6 +24,7 @@ import {
   relativeAge,
   RemoteHintChip,
 } from "@web/components.tsx";
+import { Markdown } from "@web/markdown.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asBoardId, asPostingId, type BoardId } from "@platform/ids.ts";
 import type { Board, Compensation, Posting } from "@domain/discovery/types.ts";
@@ -82,8 +86,7 @@ const PostingsPage: FC<ListProps> = (props) => {
       <section class="panel">
         <form method="get" action="/postings" class="stack">
           <div class="field-row">
-            <div>
-              <label for="q">Search</label>
+            <Field label="Search" for="q" hint="Keyword match over titles and descriptions.">
               <input
                 id="q"
                 name="q"
@@ -91,9 +94,8 @@ const PostingsPage: FC<ListProps> = (props) => {
                 value={props.search}
                 placeholder="postgres, typescript"
               />
-            </div>
-            <div>
-              <label for="board">Board</label>
+            </Field>
+            <Field label="Board" for="board">
               <select id="board" name="board">
                 <option value="">All boards</option>
                 {props.boards.map((board) => (
@@ -102,25 +104,18 @@ const PostingsPage: FC<ListProps> = (props) => {
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label class="checkbox" for="unlisted">
-                <input
-                  id="unlisted"
-                  name="unlisted"
-                  type="checkbox"
-                  value="1"
-                  checked={props.includeUnlisted}
-                />
-                Include postings no longer listed
-              </label>
-              <p class="field-hint">
-                "No longer listed" means only that. Not filled, not cancelled, not closed.
-              </p>
-            </div>
-            <div>
+            </Field>
+            <CheckboxField
+              id="unlisted"
+              name="unlisted"
+              value="1"
+              checked={props.includeUnlisted}
+              label="Include postings no longer listed"
+              hint="No longer listed means only that: not filled, not cancelled, not closed."
+            />
+            <FieldActions>
               <button type="submit" class="primary">Apply</button>
-            </div>
+            </FieldActions>
           </div>
         </form>
       </section>
@@ -310,7 +305,16 @@ const PostingDetailPage: FC<{ posting: Posting; company: string; csrfToken: stri
           <h2>Description</h2>
           <span class="chip muted">as published, converted to markdown</span>
         </header>
-        <div class="posting-body">{p.descriptionText}</div>
+        {
+          /*
+          Rendered, not printed. The stored text is still the exact markdown the
+          converter produced — this only decides how it is shown, and the
+          "as published" chip above still describes where it came from.
+        */
+        }
+        <div class="posting-body">
+          <Markdown text={p.descriptionText} />
+        </div>
       </section>
     </Layout>
   );
