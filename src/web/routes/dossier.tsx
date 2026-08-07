@@ -343,6 +343,7 @@ const DossierPage: FC<{
       <section class="panel stack">
         <header>
           <h2>Add a fact</h2>
+          <a class="button quiet" href="/dossier/seed">Seed from a resume →</a>
         </header>
         <FactForm
           action="/dossier/facts"

@@ -3,8 +3,46 @@
 Finds roles matching demonstrated skills, and removes friction from applying to them. Single user.
 Never submits anything.
 
-See the project brief for the full design. This README covers what exists, how to run it, and what
-is deliberately not here yet.
+Postings are collected from company ATS feeds, scored against a written skill profile by semantic
+similarity, and turned into a resume built from a fact set — never a document edited freehand. Every
+generated word traces back to something the user actually wrote or a fact they approved; nothing is
+invented, and nothing is ever submitted anywhere without a human clicking "open the company's form"
+and doing it themselves.
+
+## Ethos: friction is a bug
+
+Nearly every milestone below started from finding a place the app was making the user do something
+tedious that the app itself was better positioned to do. Guessing an ATS slug became
+[a lookup that probes and pre-fills it](docs/pages/boards.md). Hunting the dashboard for what needed
+attention became a single ["waiting for you" list](docs/pages/dashboard.md), ordered by urgency.
+Manually noticing an application had gone quiet became
+[an automated sweep](docs/pages/applications.md) that only resets when you log real activity.
+Copying contact details into a form became
+[read-only, copy-ready fields](docs/pages/applications.md#detail-page) sourced from one place. The
+constant is the same: find the copy-paste, the guesswork, the thing you'd do the same way every time
+— and have the app do it instead, without ever crossing the line into inventing something that isn't
+true (see [Dossier](docs/pages/dossier.md) for how that line is enforced structurally, not just by
+asking a model nicely).
+
+This README covers what exists, how to run it, and what is deliberately not here yet. Each page also
+has its own short tutorial — start there for how to actually use the thing.
+
+## Page tutorials
+
+| Page                                       | What it's for                                                         |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| [Dashboard](docs/pages/dashboard.md)       | What's waiting for you, across every other page                       |
+| [Boards](docs/pages/boards.md)             | The ATS registry — add a board by name, not by guessed slug           |
+| [Postings](docs/pages/postings.md)         | Every job pulled from every registered board                          |
+| [Matches](docs/pages/matches.md)           | Postings scored against your profile, bucketed strong/plausible/weak  |
+| [Profile](docs/pages/profile.md)           | The skill profile matching reads from                                 |
+| [Dossier](docs/pages/dossier.md)           | The fact set, resume variants, AI-proposed rewrites, cover letters    |
+| [Tuning](docs/pages/tuning.md)             | Where the strong/plausible/weak cut points are set                    |
+| [Gaps](docs/pages/gaps.md)                 | Vocabulary that shows up in postings but not in your profile or facts |
+| [Applications](docs/pages/applications.md) | Tracking — never submitting                                           |
+| [Coverage](docs/pages/coverage.md)         | The honesty page: what's actually being read, and what isn't          |
+| [Account](docs/pages/account.md)           | Password and passkeys                                                 |
+| [Automation](docs/pages/automation.md)     | Bearer tokens for the n8n-driven job routes                           |
 
 ## Status
 
@@ -20,6 +58,7 @@ is deliberately not here yet.
 | **M7 — Polish**         | Done. Passkeys, vocabulary-gap detection, a dashboard that knows what the app now does.       |
 | **M8 — Interface**      | Done. A field standard, rendered markdown, a profile page that scales, a mobile pass.         |
 | **M9 — Board lookup**   | Done. Name a company, get its board. Slug guessing, cheap probes, an accumulating catalogue.  |
+| **M11 — Seed a resume** | Done. Paste a resume, review extracted facts, add only what you check.                        |
 
 ## Stack
 
@@ -102,6 +141,9 @@ The three bounded contexts get separate Postgres schema namespaces: `discovery`,
 an application must outlive the posting it was sent to.
 
 ## Decisions worth knowing about
+
+The `§` references below point to sections of the original design brief that shaped each milestone.
+The brief itself isn't in this repo — treat them as citations to a private spec, not broken links.
 
 **Provenance is non-nullable.** Every posting row records which adapter version produced it, from
 exactly which URL, as of exactly when, and our own content hash. Anything the UI renders can show
@@ -467,8 +509,33 @@ The distinction the whole thing turns on is **404 versus everything else**. A 40
 answering. A timeout is not an answer, and recording it as one would put a wrong fact in the
 catalogue for a week, so the two are kept apart in the type, in the schema, and on the page.
 
-Still to do: bulk paste. Twenty company names is eighty requests per host, which is well past what
-belongs in a page load — it wants the job-route pattern the rest of the long work already uses.
+**Decided against: bulk paste.** Twenty company names is eighty requests per host — well past what
+belongs in a page load, and it would want the job-route pattern the rest of the long work already
+uses to do properly. Weighed against a single-user tool adding boards one at a time anyway, it
+wasn't worth the added surface, so `/boards/find` stays a one-name-at-a-time lookup.
+
+### Seeding the dossier from a resume (M11)
+
+The dossier's own rule from M4 still holds: **no model writes to `dossier.facts`, in any
+milestone.** So `/dossier/seed` only ever produces candidates — `@domain/dossier/seed.ts` extracts a
+fact set from pasted resume text and hands it back as plain data, pre-filled into the same fields
+the manual "Add a fact" form uses. Nothing reaches `FactRepo.create` until the review page's own
+submit, which is a human clicking, same as accepting a tailoring proposal is the only path into a
+variant.
+
+**There is no existing fact set to check citations against**, which is the opposite situation from
+tailoring: there, an unknown `factId` proves the model wasn't working from what it was given, and
+the whole response is rejected. Here, the source is whatever the user pasted, and "is this true" is
+a judgment the review step makes, not something a schema can enforce. So the discipline is upstream,
+in the prompt — extract close to the source, never invent a date or employer the resume doesn't
+state — and downstream, in the UI: every field is editable before it's created, and unchecking one
+leaves it out entirely.
+
+**Bullets need a parent that doesn't have an id yet.** A role and its bullets are extracted in the
+same response, before either exists as a real fact, so the model links them by a plain integer
+`parentIndex` into that same response rather than a `FactId`. Creation runs in two passes — every
+role and project first, then bullets resolving their parent from what just got created — and a
+bullet whose parent wasn't included is skipped and reported, not created parentless.
 
 ## Open questions from the brief
 
