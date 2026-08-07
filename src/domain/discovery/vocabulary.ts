@@ -123,6 +123,39 @@ function isContentWord(token: string): boolean {
   return !STOPWORDS.has(token);
 }
 
+/** A document with no term in common with the profile — a candidate to write about. */
+export interface UncoveredDocument {
+  readonly id: string;
+  readonly label: string;
+}
+
+/**
+ * Documents sharing zero terms with `profileText` — the fact-set half of a
+ * writing prompt (M12): "you wrote this, but nothing in your profile reflects
+ * it yet."
+ *
+ * Deliberately blunt, not fuzzy: any single shared word — including an
+ * unrelated one, like both texts happening to say "built" — counts as
+ * coverage and drops a document from the list. That is the same honest limit
+ * the rest of this module accepts: counting is checkable, guessing at
+ * relatedness is not. A shrunken candidate pool from a large profile is the
+ * visible cost of that choice.
+ */
+export function findUncoveredDocuments(
+  documents: readonly TermDocument[],
+  profileText: string,
+): UncoveredDocument[] {
+  const profileTerms = termsIn(profileText);
+  const uncovered: UncoveredDocument[] = [];
+  for (const doc of documents) {
+    const terms = termsIn(doc.text);
+    if (terms.size === 0) continue; // nothing to compare — not a prompt candidate
+    const covered = [...terms].some((term) => profileTerms.has(term));
+    if (!covered) uncovered.push({ id: doc.id, label: doc.label });
+  }
+  return uncovered;
+}
+
 /**
  * Where a phrase cannot reach across. Sentence-ending punctuation only counts
  * when whitespace follows it, so `node.js` and `.net` survive; newlines end a

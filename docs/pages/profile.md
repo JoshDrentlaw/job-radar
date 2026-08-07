@@ -5,6 +5,21 @@ The input side of matching. A **facet** is one angle on your experience — `bac
 facets that would match the same postings aren't earning their keep as separate facets, and the
 page's own copy warns against splitting them that finely.
 
+## Something to write about
+
+Figuring out what to write is the hard part, so the page opens with up to two prompts pulled from
+data it already has — no new writing required to get one:
+
+- **A fact no facet reflects yet** — something already in your [Dossier](dossier.md) that shares no
+  word with your profile. Quoted back to you directly, since it's a real sentence you wrote.
+- **A term postings keep using that appears nowhere** — the same "not written anywhere" situation
+  [Gaps](gaps.md) reports, surfaced as a question instead of a table row: have you actually done
+  that, or just never called it this?
+
+Both are picked at random and by word overlap, not meaning, so treat them as a nudge rather than a
+verdict — **Another prompt** reloads the page for a different pick. The panel is absent entirely
+once there's nothing left to suggest.
+
 ## Using it
 
 - **Create a facet**: a short **name** and a markdown **content** field. The form opens
