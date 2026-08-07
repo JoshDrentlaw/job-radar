@@ -11,7 +11,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, formatDateTime, Notice, relativeAge } from "@web/components.tsx";
+import { CsrfField, formatDateTime, Notice, relativeAge, Tabs } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import type { Credential } from "@auth/webauthn/service.ts";
 import { type RegistrationResponse, WebAuthnError } from "@auth/webauthn/ceremony.ts";
@@ -34,7 +34,14 @@ const AccountPage: FC<{
   notice?: string;
   error?: string;
 }> = (props) => (
-  <Layout title="Account" current="account" csrfToken={props.csrfToken}>
+  <Layout title="Account" current="settings" csrfToken={props.csrfToken}>
+    <Tabs
+      label="Settings sections"
+      items={[
+        { href: "/account", label: "Account", current: true },
+        { href: "/automation", label: "Automation" },
+      ]}
+    />
     <div class="page-head">
       <div>
         <h1>Account</h1>

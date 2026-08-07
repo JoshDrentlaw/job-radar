@@ -12,7 +12,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { formatDateTime, Metric, Notice, relativeAge, StatusChip } from "@web/components.tsx";
+import { formatDateTime, Metric, Notice, relativeAge, StatusChip, Tabs } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import {
   type BoardOutcome,
@@ -35,7 +35,14 @@ const CoveragePage: FC<{
   const stale = active.filter((b) => b.lastFetchStatus !== "ok");
 
   return (
-    <Layout title="Coverage" current="coverage" csrfToken={props.csrfToken}>
+    <Layout title="Coverage" current="boards" csrfToken={props.csrfToken}>
+      <Tabs
+        label="Boards sections"
+        items={[
+          { href: "/boards", label: "Boards" },
+          { href: "/coverage", label: "Coverage", current: true },
+        ]}
+      />
       <div class="page-head">
         <div>
           <h1>Coverage</h1>
@@ -221,7 +228,7 @@ const RunDetailPage: FC<{
   const missing = props.run.boardsConfigured - props.outcomes.length;
 
   return (
-    <Layout title="Collection run" current="coverage" csrfToken={props.csrfToken}>
+    <Layout title="Collection run" current="boards" csrfToken={props.csrfToken}>
       <div class="page-head">
         <div>
           <h1>Collection run</h1>

@@ -20,6 +20,7 @@ import {
   Notice,
   ProvenanceLine,
   relativeAge,
+  Tabs,
 } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asFacetId, asPostingId, type FacetId, type PostingId } from "@platform/ids.ts";
@@ -127,6 +128,14 @@ const MatchesPage: FC<{
 
   return (
     <Layout title="Matches" current="matches" csrfToken={props.csrfToken}>
+      <Tabs
+        label="Matches sections"
+        items={[
+          { href: "/matches", label: "Matches", current: true },
+          { href: "/postings", label: "All postings" },
+          { href: "/tuning", label: "Tuning" },
+        ]}
+      />
       <div class="page-head">
         <div>
           <h1>Matches</h1>

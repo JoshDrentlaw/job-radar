@@ -12,7 +12,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, Field, Metric, Notice } from "@web/components.tsx";
+import { CsrfField, Field, Metric, Notice, Tabs } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import {
   BUCKET_THRESHOLDS_SETTING,
@@ -89,7 +89,15 @@ const TuningPage: FC<{
   const weakCount = values.length - strongCount - plausibleCount;
 
   return (
-    <Layout title="Tuning" current="tuning" csrfToken={props.csrfToken}>
+    <Layout title="Tuning" current="matches" csrfToken={props.csrfToken}>
+      <Tabs
+        label="Matches sections"
+        items={[
+          { href: "/matches", label: "Matches" },
+          { href: "/postings", label: "All postings" },
+          { href: "/tuning", label: "Tuning", current: true },
+        ]}
+      />
       <div class="page-head">
         <div>
           <h1>Match tuning</h1>

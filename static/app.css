@@ -251,6 +251,31 @@ main {
   }
 }
 
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-m);
+  border-bottom: var(--border-width) solid var(--rule);
+
+  & a {
+    text-decoration: none;
+    color: var(--ink-muted);
+    font-size: var(--step-0);
+    padding-block: var(--space-2xs);
+    border-bottom: 2px solid transparent;
+
+    &:hover {
+      color: var(--ink);
+    }
+
+    &[aria-current="page"] {
+      color: var(--ink);
+      border-bottom-color: var(--accent);
+      font-weight: 600;
+    }
+  }
+}
+
 .stack {
   display: flex;
   flex-direction: column;

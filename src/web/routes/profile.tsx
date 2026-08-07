@@ -9,7 +9,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CheckboxField, CsrfField, Field, formatDateTime, Notice } from "@web/components.tsx";
+import { CheckboxField, CsrfField, Field, formatDateTime, Notice, Tabs } from "@web/components.tsx";
 import { Markdown } from "@web/markdown.tsx";
 import type { AppEnv } from "@web/types.ts";
 import type { Services } from "@web/services.ts";
@@ -199,6 +199,13 @@ const ProfilePage: FC<{
   notice?: string;
 }> = (props) => (
   <Layout title="Profile" current="profile" csrfToken={props.csrfToken}>
+    <Tabs
+      label="Profile sections"
+      items={[
+        { href: "/profile", label: "Profile", current: true },
+        { href: "/gaps", label: "Gaps" },
+      ]}
+    />
     <div class="page-head">
       <div>
         <h1>Skill profile</h1>

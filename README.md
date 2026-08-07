@@ -29,20 +29,15 @@ has its own short tutorial — start there for how to actually use the thing.
 
 ## Page tutorials
 
-| Page                                       | What it's for                                                         |
-| ------------------------------------------ | --------------------------------------------------------------------- |
-| [Dashboard](docs/pages/dashboard.md)       | What's waiting for you, across every other page                       |
-| [Boards](docs/pages/boards.md)             | The ATS registry — add a board by name, not by guessed slug           |
-| [Postings](docs/pages/postings.md)         | Every job pulled from every registered board                          |
-| [Matches](docs/pages/matches.md)           | Postings scored against your profile, bucketed strong/plausible/weak  |
-| [Profile](docs/pages/profile.md)           | The skill profile matching reads from                                 |
-| [Dossier](docs/pages/dossier.md)           | The fact set, resume variants, AI-proposed rewrites, cover letters    |
-| [Tuning](docs/pages/tuning.md)             | Where the strong/plausible/weak cut points are set                    |
-| [Gaps](docs/pages/gaps.md)                 | Vocabulary that shows up in postings but not in your profile or facts |
-| [Applications](docs/pages/applications.md) | Tracking — never submitting                                           |
-| [Coverage](docs/pages/coverage.md)         | The honesty page: what's actually being read, and what isn't          |
-| [Account](docs/pages/account.md)           | Password and passkeys                                                 |
-| [Automation](docs/pages/automation.md)     | Bearer tokens for the n8n-driven job routes                           |
+| Page                                       | What it's for                                                                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Dashboard](docs/pages/dashboard.md)       | What's waiting for you, across every other page                                                                                                        |
+| [Boards](docs/pages/boards.md)             | The ATS registry — add a board by name, not by guessed slug. **Coverage** tab: what's actually being read, and what isn't                              |
+| [Matches](docs/pages/matches.md)           | Postings scored against your profile, bucketed strong/plausible/weak. **All postings** tab: the raw feed. **Tuning** tab: where the cut points are set |
+| [Profile](docs/pages/profile.md)           | The skill profile matching reads from. **Gaps** tab: vocabulary that shows up in postings but not in your profile or facts                             |
+| [Dossier](docs/pages/dossier.md)           | The fact set, resume variants, AI-proposed rewrites, cover letters                                                                                     |
+| [Applications](docs/pages/applications.md) | Tracking — never submitting                                                                                                                            |
+| [Settings](docs/pages/settings.md)         | **Account** tab: password and passkeys. **Automation** tab: bearer tokens for the n8n-driven job routes                                                |
 
 ## Status
 
