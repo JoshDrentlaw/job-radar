@@ -84,5 +84,5 @@ Identity.
 
 ## Elsewhere
 
-[Applications](applications.md) freezes a variant the moment you start tracking one. [Gaps](gaps.md)
-compares this fact set against your [Profile](profile.md).
+[Applications](applications.md) freezes a variant the moment you start tracking one.
+[Gaps](profile.md#gaps) compares this fact set against your [Profile](profile.md).

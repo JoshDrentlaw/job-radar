@@ -120,6 +120,23 @@ export const Notice: FC<PropsWithChildren<{ kind?: "ok" | "error" | "warn" }>> =
   <p class={`notice${props.kind ? ` ${props.kind}` : ""}`}>{props.children}</p>
 );
 
+/**
+ * Sub-navigation between sibling views of one nav item — e.g. Boards and
+ * Coverage, which share a single top-level slot but are separate routes.
+ */
+export const Tabs: FC<{
+  readonly label: string;
+  readonly items: readonly { href: string; label: string; current?: boolean }[];
+}> = (props) => (
+  <nav class="tabs" aria-label={props.label}>
+    {props.items.map((item) => (
+      <a href={item.href} {...(item.current ? { "aria-current": "page" } : {})}>
+        {item.label}
+      </a>
+    ))}
+  </nav>
+);
+
 export const CsrfField: FC<{ token: string }> = ({ token }) => (
   <input type="hidden" name="_csrf" value={token} />
 );

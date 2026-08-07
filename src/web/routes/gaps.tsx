@@ -13,7 +13,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { Metric, Notice } from "@web/components.tsx";
+import { Metric, Notice, Tabs } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import {
   DEFAULT_VOCABULARY_OPTIONS,
@@ -96,7 +96,14 @@ const GapsPage: FC<{
   }
 
   return (
-    <Layout title="Gaps" current="gaps" csrfToken={props.csrfToken}>
+    <Layout title="Gaps" current="profile" csrfToken={props.csrfToken}>
+      <Tabs
+        label="Profile sections"
+        items={[
+          { href: "/profile", label: "Profile" },
+          { href: "/gaps", label: "Gaps", current: true },
+        ]}
+      />
       <div class="page-head">
         <div>
           <h1>Vocabulary gaps</h1>

@@ -23,6 +23,7 @@ import {
   ProvenanceLine,
   relativeAge,
   RemoteHintChip,
+  Tabs,
 } from "@web/components.tsx";
 import { Markdown } from "@web/markdown.tsx";
 import type { AppEnv } from "@web/types.ts";
@@ -71,7 +72,15 @@ function pageHref(props: ListProps, offset: number): string {
 const PostingsPage: FC<ListProps> = (props) => {
   const companyById = new Map(props.boards.map((b) => [b.id as string, b.companyName]));
   return (
-    <Layout title="Postings" current="postings" csrfToken={props.csrfToken}>
+    <Layout title="Postings" current="matches" csrfToken={props.csrfToken}>
+      <Tabs
+        label="Matches sections"
+        items={[
+          { href: "/matches", label: "Matches" },
+          { href: "/postings", label: "All postings", current: true },
+          { href: "/tuning", label: "Tuning" },
+        ]}
+      />
       <div class="page-head">
         <div>
           <h1>Postings</h1>
@@ -214,7 +223,7 @@ const PostingDetailPage: FC<{ posting: Posting; company: string; csrfToken: stri
 ) => {
   const p = props.posting;
   return (
-    <Layout title={p.title} current="postings" csrfToken={props.csrfToken}>
+    <Layout title={p.title} current="matches" csrfToken={props.csrfToken}>
       <div class="page-head">
         <div>
           <h1>{p.title}</h1>

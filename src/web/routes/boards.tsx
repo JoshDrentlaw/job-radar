@@ -19,6 +19,7 @@ import {
   Notice,
   relativeAge,
   StatusChip,
+  Tabs,
 } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import { asBoardId, type BoardId, IdError, isPlatform, PLATFORMS } from "@platform/ids.ts";
@@ -53,6 +54,13 @@ interface BoardsPageProps {
 
 const BoardsPage: FC<BoardsPageProps> = (props) => (
   <Layout title="Boards" current="boards" csrfToken={props.csrfToken}>
+    <Tabs
+      label="Boards sections"
+      items={[
+        { href: "/boards", label: "Boards", current: true },
+        { href: "/coverage", label: "Coverage" },
+      ]}
+    />
     <div class="page-head">
       <div>
         <h1>Boards</h1>

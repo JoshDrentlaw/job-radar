@@ -13,32 +13,22 @@ export interface LayoutProps {
   readonly current?:
     | "dashboard"
     | "boards"
-    | "postings"
     | "matches"
     | "profile"
     | "dossier"
     | "applications"
-    | "automation"
-    | "account"
-    | "tuning"
-    | "gaps"
-    | "coverage";
+    | "settings";
   readonly csrfToken?: string;
 }
 
 const NAV = [
   { key: "dashboard", href: "/", label: "Dashboard" },
   { key: "boards", href: "/boards", label: "Boards" },
-  { key: "postings", href: "/postings", label: "Postings" },
   { key: "matches", href: "/matches", label: "Matches" },
   { key: "profile", href: "/profile", label: "Profile" },
   { key: "dossier", href: "/dossier", label: "Dossier" },
-  { key: "tuning", href: "/tuning", label: "Tuning" },
-  { key: "gaps", href: "/gaps", label: "Gaps" },
   { key: "applications", href: "/applications", label: "Applications" },
-  { key: "coverage", href: "/coverage", label: "Coverage" },
-  { key: "automation", href: "/automation", label: "Automation" },
-  { key: "account", href: "/account", label: "Account" },
+  { key: "settings", href: "/account", label: "Settings" },
 ] as const;
 
 export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => (

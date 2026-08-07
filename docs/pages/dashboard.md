@@ -24,8 +24,8 @@ on a quiet day is genuinely empty, not a wall of "0 items" cards.
   [Applications](applications.md) — the dashboard reads whatever is currently set.
 - "Waiting for you" items link straight to where the action happens: a pending proposal links into
   the tailoring review queue, a quiet application links to its detail page, a failing board links to
-  [Coverage](coverage.md).
+  [Coverage](boards.md#coverage).
 
 ## Elsewhere
 
-[Matches](matches.md) · [Coverage](coverage.md) · [Postings](postings.md)
+[Matches](matches.md) · [Coverage](boards.md#coverage) · [All postings](matches.md#all-postings)

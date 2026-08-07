@@ -12,7 +12,7 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CsrfField, formatDateTime, Notice, relativeAge } from "@web/components.tsx";
+import { CsrfField, formatDateTime, Notice, relativeAge, Tabs } from "@web/components.tsx";
 import type { AppEnv } from "@web/types.ts";
 import type { ApiToken } from "@auth/api-token.ts";
 
@@ -29,7 +29,14 @@ const TokensPage: FC<{
   const revoked = props.tokens.filter((token) => token.revokedAt !== null);
 
   return (
-    <Layout title="Automation" current="automation" csrfToken={props.csrfToken}>
+    <Layout title="Automation" current="settings" csrfToken={props.csrfToken}>
+      <Tabs
+        label="Settings sections"
+        items={[
+          { href: "/account", label: "Account" },
+          { href: "/automation", label: "Automation", current: true },
+        ]}
+      />
       <div class="page-head">
         <div>
           <h1>Automation</h1>
