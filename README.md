@@ -3,8 +3,45 @@
 Finds roles matching demonstrated skills, and removes friction from applying to them. Single user.
 Never submits anything.
 
-See the project brief for the full design. This README covers what exists, how to run it, and what
-is deliberately not here yet.
+Postings are collected from company ATS feeds, scored against a written skill profile by semantic
+similarity, and turned into a resume built from a fact set — never a document edited freehand.
+Every generated word traces back to something the user actually wrote or a fact they approved;
+nothing is invented, and nothing is ever submitted anywhere without a human clicking "open the
+company's form" and doing it themselves.
+
+## Ethos: friction is a bug
+
+Nearly every milestone below started from finding a place the app was making the user do
+something tedious that the app itself was better positioned to do. Guessing an ATS slug became
+[a lookup that probes and pre-fills it](docs/pages/boards.md). Hunting the dashboard for what
+needed attention became a single ["waiting for you" list](docs/pages/dashboard.md), ordered by
+urgency. Manually noticing an application had gone quiet became [an automated sweep](docs/pages/applications.md)
+that only resets when you log real activity. Copying contact details into a form became
+[read-only, copy-ready fields](docs/pages/applications.md#detail-page) sourced from one place. The
+constant is the same: find the copy-paste, the guesswork, the thing you'd do the same way every
+time — and have the app do it instead, without ever crossing the line into inventing something
+that isn't true (see [Dossier](docs/pages/dossier.md) for how that line is enforced structurally,
+not just by asking a model nicely).
+
+This README covers what exists, how to run it, and what is deliberately not here yet. Each page
+also has its own short tutorial — start there for how to actually use the thing.
+
+## Page tutorials
+
+| Page | What it's for |
+| --- | --- |
+| [Dashboard](docs/pages/dashboard.md) | What's waiting for you, across every other page |
+| [Boards](docs/pages/boards.md) | The ATS registry — add a board by name, not by guessed slug |
+| [Postings](docs/pages/postings.md) | Every job pulled from every registered board |
+| [Matches](docs/pages/matches.md) | Postings scored against your profile, bucketed strong/plausible/weak |
+| [Profile](docs/pages/profile.md) | The skill profile matching reads from |
+| [Dossier](docs/pages/dossier.md) | The fact set, resume variants, AI-proposed rewrites, cover letters |
+| [Tuning](docs/pages/tuning.md) | Where the strong/plausible/weak cut points are set |
+| [Gaps](docs/pages/gaps.md) | Vocabulary that shows up in postings but not in your profile or facts |
+| [Applications](docs/pages/applications.md) | Tracking — never submitting |
+| [Coverage](docs/pages/coverage.md) | The honesty page: what's actually being read, and what isn't |
+| [Account](docs/pages/account.md) | Password and passkeys |
+| [Automation](docs/pages/automation.md) | Bearer tokens for the n8n-driven job routes |
 
 ## Status
 
@@ -102,6 +139,10 @@ The three bounded contexts get separate Postgres schema namespaces: `discovery`,
 an application must outlive the posting it was sent to.
 
 ## Decisions worth knowing about
+
+The `§` references below point to sections of the original design brief that shaped each
+milestone. The brief itself isn't in this repo — treat them as citations to a private spec, not
+broken links.
 
 **Provenance is non-nullable.** Every posting row records which adapter version produced it, from
 exactly which URL, as of exactly when, and our own content hash. Anything the UI renders can show
@@ -467,8 +508,10 @@ The distinction the whole thing turns on is **404 versus everything else**. A 40
 answering. A timeout is not an answer, and recording it as one would put a wrong fact in the
 catalogue for a week, so the two are kept apart in the type, in the schema, and on the page.
 
-Still to do: bulk paste. Twenty company names is eighty requests per host, which is well past what
-belongs in a page load — it wants the job-route pattern the rest of the long work already uses.
+**Decided against: bulk paste.** Twenty company names is eighty requests per host — well past what
+belongs in a page load, and it would want the job-route pattern the rest of the long work already
+uses to do properly. Weighed against a single-user tool adding boards one at a time anyway, it
+wasn't worth the added surface, so `/boards/find` stays a one-name-at-a-time lookup.
 
 ## Open questions from the brief
 
