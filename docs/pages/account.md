@@ -8,11 +8,11 @@ deliberate stance on how they relate.
 A second way in, not a replacement — the password stays, because a single-user app whose only
 credential lives on one device is one lost phone away from locking itself out. **Register this
 device** runs entirely in the browser via WebAuthn; give it a label first (e.g. "Laptop") so it's
-identifiable later. Each registered credential can be **renamed** or **removed**; removing the
-last one is allowed, since the password still works as a fallback. The **Synced** column shows
-whether a credential is backed up across your devices or lives on just the one machine that
-created it. Passkeys need a secure context (HTTPS, or `localhost` in development) — the page warns
-plainly when the current context won't support the ceremony.
+identifiable later. Each registered credential can be **renamed** or **removed**; removing the last
+one is allowed, since the password still works as a fallback. The **Synced** column shows whether a
+credential is backed up across your devices or lives on just the one machine that created it.
+Passkeys need a secure context (HTTPS, or `localhost` in development) — the page warns plainly when
+the current context won't support the ceremony.
 
 ## Password
 

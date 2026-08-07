@@ -9,15 +9,15 @@ you.
 From a [match](matches.md), **Track an application** opens `/applications/new` pre-populated with
 the posting. Pick which [variant](dossier.md#variants--dossiervariants) to send — variants show
 their fact count and whether they're already frozen. Submitting **freezes that variant** if it
-wasn't already frozen, so the resume you can later re-download is guaranteed to be exactly what
-you sent, not whatever the variant has since become.
+wasn't already frozen, so the resume you can later re-download is guaranteed to be exactly what you
+sent, not whatever the variant has since become.
 
 ## The list
 
 Status counts up top, a table of role / company / status / last activity, and a **Show
 closed**/**Hide closed** toggle. **Ghosting window** (default 21 days) is set here — an external
-sweep marks an application `ghosted` after this many days of silence, and any logged activity
-resets that clock.
+sweep marks an application `ghosted` after this many days of silence, and any logged activity resets
+that clock.
 
 ## Detail page
 
@@ -30,10 +30,10 @@ resets that clock.
   self-reported "ghosted" would be a guess about the employer rather than an observation about
   silence.
 - **Log something** and **Notes** add to an append-only timeline — nothing on it is ever edited or
-  deleted; a correction is a new entry. Rule-set transitions (like an automatic ghosting) are
-  marked distinctly from things you logged yourself.
-- **Delete this record** removes the whole timeline. Recording a status like "withdrawn" instead
-  is almost always what you actually want — the panel says so.
+  deleted; a correction is a new entry. Rule-set transitions (like an automatic ghosting) are marked
+  distinctly from things you logged yourself.
+- **Delete this record** removes the whole timeline. Recording a status like "withdrawn" instead is
+  almost always what you actually want — the panel says so.
 
 ## Worth knowing
 

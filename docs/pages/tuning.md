@@ -7,10 +7,12 @@ bucket each bin currently falls in.
 ## Using it
 
 - **Strong at or above** and **Plausible at or above** are the two cut points; anything below
-  plausible is weak. Saving them re-buckets every existing score immediately — it doesn't
-  re-score anything, so this is instant even with a large corpus.
-- **Export CSV** downloads the full score list (`posting_id, title, company, facet, score,
-  scored_at`) if you want to look at the distribution outside the app.
+  plausible is weak. Saving them re-buckets every existing score immediately — it doesn't re-score
+  anything, so this is instant even with a large corpus.
+- **Export CSV** downloads the full score list
+  (`posting_id, title, company, facet, score,
+  scored_at`) if you want to look at the distribution
+  outside the app.
 - With nothing scored yet, the histogram and metrics are simply absent rather than showing empty
   charts.
 

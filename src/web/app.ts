@@ -21,6 +21,7 @@ import { profileRoutes } from "./routes/profile.tsx";
 import { matchRoutes } from "./routes/matches.tsx";
 import { tuningRoutes } from "./routes/tuning.tsx";
 import { dossierRoutes } from "./routes/dossier.tsx";
+import { seedRoutes } from "./routes/seed.tsx";
 import { variantRoutes } from "./routes/variants.tsx";
 import { tailoringRoutes } from "./routes/tailoring.tsx";
 import { letterRoutes } from "./routes/letters.tsx";
@@ -128,6 +129,7 @@ export function createApp(options: AppOptions): Hono<AppEnv> {
   app.route("/", matchRoutes);
   app.route("/", tuningRoutes);
   app.route("/", dossierRoutes);
+  app.route("/", seedRoutes);
   app.route("/", variantRoutes);
   app.route("/", tailoringRoutes);
   app.route("/", letterRoutes);
