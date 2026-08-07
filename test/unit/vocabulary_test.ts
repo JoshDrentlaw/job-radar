@@ -1,5 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import {
+  findUncoveredDocuments,
   findVocabularyGaps,
   gapKind,
   type TermDocument,
@@ -9,6 +10,10 @@ import {
 
 function posting(id: string, label: string, text: string): TermDocument {
   return { id, label, text };
+}
+
+function fact(id: string, text: string): TermDocument {
+  return { id, label: text, text };
 }
 
 Deno.test("tokenize keeps the punctuation that is part of a name", () => {
@@ -181,6 +186,30 @@ Deno.test("nothing to examine produces an empty report rather than an error", ()
   const report = findVocabularyGaps([], "profile text", "dossier text");
   assertEquals(report.gaps, []);
   assertEquals(report.postingsExamined, 0);
+});
+
+/* ------------------------------------------------ writing prompts (M12) --- */
+
+Deno.test("a document sharing zero terms with the profile is uncovered", () => {
+  const facts = [fact("f1", "Built the data ingest pipeline at Acme.")];
+  const uncovered = findUncoveredDocuments(facts, "Ran a Kubernetes fleet in production.");
+  assertEquals(uncovered, [{ id: "f1", label: "Built the data ingest pipeline at Acme." }]);
+});
+
+Deno.test("even one shared word counts as coverage — blunt, not fuzzy", () => {
+  const facts = [fact("f1", "Built the data ingest pipeline at Acme.")];
+  // Shares only "built" with the profile, on an unrelated topic — still covered.
+  assertEquals(findUncoveredDocuments(facts, "Built a mobile app in Swift."), []);
+});
+
+Deno.test("an empty profile leaves every non-empty fact uncovered", () => {
+  const facts = [fact("f1", "Ran a Postgres fleet."), fact("f2", "Wrote a CLI tool.")];
+  assertEquals(findUncoveredDocuments(facts, "").length, 2);
+});
+
+Deno.test("a fact with no content words (after stopwords) is not a candidate either way", () => {
+  const facts = [fact("f1", "and the of")]; // pure stopwords, tokenizes to nothing
+  assertEquals(findUncoveredDocuments(facts, ""), []);
 });
 
 Deno.test("matching is case- and inflection-blind only where it honestly can be", () => {

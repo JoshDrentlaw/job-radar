@@ -46,19 +46,20 @@ has its own short tutorial — start there for how to actually use the thing.
 
 ## Status
 
-| Milestone               | State                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| **M0 — Skeleton**       | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
-| **M1 — Boards**         | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
-| **M2 — More adapters**  | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
-| **M3 — Matching**       | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
-| **M4 — Dossier**        | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
-| **M5 — Tailoring**      | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
-| **M6 — Pipeline + n8n** | Done. Applications with an append-only timeline, bearer-authenticated job routes, ghosting.   |
-| **M7 — Polish**         | Done. Passkeys, vocabulary-gap detection, a dashboard that knows what the app now does.       |
-| **M8 — Interface**      | Done. A field standard, rendered markdown, a profile page that scales, a mobile pass.         |
-| **M9 — Board lookup**   | Done. Name a company, get its board. Slug guessing, cheap probes, an accumulating catalogue.  |
-| **M11 — Seed a resume** | Done. Paste a resume, review extracted facts, add only what you check.                        |
+| Milestone                 | State                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| **M0 — Skeleton**         | Done. Hono, Postgres, migration runner, password auth, sessions, default-deny router.         |
+| **M1 — Boards**           | Done. Board CRUD, Greenhouse adapter, snapshot + diff, postings list, coverage ledger.        |
+| **M2 — More adapters**    | Done. Lever and Ashby adapters, both verified live; parser unit tests for all three adapters. |
+| **M3 — Matching**         | Done. Profile facets, chunked Voyage embeddings, match records with cited chunks, tuning.     |
+| **M4 — Dossier**          | Done. Fact set, variants with manual rewording, deterministic PDF/DOCX rendering. No LLM.     |
+| **M5 — Tailoring**        | Done. Anthropic integration under the fact-id constraint, review flow, cover letters.         |
+| **M6 — Pipeline + n8n**   | Done. Applications with an append-only timeline, bearer-authenticated job routes, ghosting.   |
+| **M7 — Polish**           | Done. Passkeys, vocabulary-gap detection, a dashboard that knows what the app now does.       |
+| **M8 — Interface**        | Done. A field standard, rendered markdown, a profile page that scales, a mobile pass.         |
+| **M9 — Board lookup**     | Done. Name a company, get its board. Slug guessing, cheap probes, an accumulating catalogue.  |
+| **M11 — Seed a resume**   | Done. Paste a resume, review extracted facts, add only what you check.                        |
+| **M12 — Writing prompts** | Done. Two nudges on Profile, pulled from the Gaps machinery, not new logic.                   |
 
 ## Stack
 
@@ -536,6 +537,31 @@ same response, before either exists as a real fact, so the model links them by a
 `parentIndex` into that same response rather than a `FactId`. Creation runs in two passes — every
 role and project first, then bullets resolving their parent from what just got created — and a
 bullet whose parent wasn't included is skipped and reported, not created parentless.
+
+### Writing prompts on Profile (M12)
+
+The Dossier fact set and Profile facets are deliberately separate — different bounded contexts,
+different purposes: facts are atomic and citable, facets are long-form prose written to be embedded
+and matched. `embed.ts` only ever reads `FacetRepo`; nothing in the Dossier touches matching. That
+split creates real friction, though: writing a facet means first deciding what to write about, and
+the app already has the data to suggest an answer.
+
+**No new gap-detection logic.** The second prompt — a posting term that appears in neither corpus —
+is exactly the `unknown-territory` case `vocabulary.ts` already computes for the Gaps page, filtered
+from the same report `/gaps` builds. Nothing new was written to find it.
+
+**The first prompt needed one new function, not a new mechanism.** "A fact no facet reflects" isn't
+a posting-vocabulary question — it doesn't need document-frequency thresholds or a market-relevance
+filter — so it isn't routed through `findVocabularyGaps`. `findUncoveredDocuments` reuses the same
+`termsIn` tokenizer directly: a fact is a candidate when it shares zero terms with the profile text.
+That bar is deliberately blunt. A fact sharing even one unrelated word (both texts happen to say
+"built") counts as covered, which shrinks the candidate pool from a large profile. Consistent with
+this module's rule since M7 — counting is checkable, guessing at relatedness is not — and cheap to
+revisit once real usage shows whether blunt is too blunt.
+
+**No persistence, on purpose.** A prompt is picked at random from the current candidate set on every
+request; "Another prompt" is a plain reload. Nothing is stored, dismissed, or tracked across visits
+— matching the rest of this feature's scope: a nudge, not a queue to manage.
 
 ## Open questions from the brief
 

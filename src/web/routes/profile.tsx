@@ -12,8 +12,19 @@ import { Layout } from "@web/layout.tsx";
 import { CheckboxField, CsrfField, Field, formatDateTime, Notice } from "@web/components.tsx";
 import { Markdown } from "@web/markdown.tsx";
 import type { AppEnv } from "@web/types.ts";
+import type { Services } from "@web/services.ts";
 import { asFacetId, type FacetId } from "@platform/ids.ts";
+import type { PostingId } from "@platform/ids.ts";
 import type { ProfileFacet } from "@domain/discovery/matching.ts";
+import {
+  DEFAULT_VOCABULARY_OPTIONS,
+  findUncoveredDocuments,
+  findVocabularyGaps,
+  gapKind,
+  type TermDocument,
+  type UncoveredDocument,
+  type VocabularyGap,
+} from "@domain/discovery/vocabulary.ts";
 
 function parseFacetId(raw: string): FacetId | null {
   try {
@@ -134,11 +145,55 @@ const FacetCard: FC<{
   );
 };
 
+/**
+ * Something to write about, picked at random from what the app already
+ * tracks: a fact no facet reflects yet, and a term postings keep using that
+ * appears in neither corpus. Either half is absent when there is nothing to
+ * suggest, and the whole panel is absent when both are (§10's honest-limit
+ * framing applies here too — this is a nudge, not a verdict).
+ */
+const WritingPrompt: FC<{
+  fact: UncoveredDocument | undefined;
+  term: VocabularyGap | undefined;
+}> = ({ fact, term }) => (
+  <section class="panel stack" id="prompts">
+    <header>
+      <h2>Something to write about</h2>
+    </header>
+    {fact !== undefined && (
+      <p>
+        You wrote about this, but no facet covers it yet: <em>"{fact.label}"</em>
+      </p>
+    )}
+    {term !== undefined && (
+      <p>
+        <strong>{term.term}</strong> shows up in {term.postingCount} posting
+        {term.postingCount === 1 ? "" : "s"} you're not addressing —{" "}
+        {term.examples.map((example, index) => (
+          <span key={example.id}>
+            {index > 0 ? ", " : ""}
+            <a href={`/matches/${encodeURIComponent(example.id)}`}>{example.label}</a>
+          </span>
+        ))}
+        . Have you done that?
+      </p>
+    )}
+    <p class="field-hint">
+      Both are picked by word overlap, not meaning — treat them as a starting point, not a verdict.
+    </p>
+    <div class="row">
+      <a class="button quiet" href="/profile#prompts">Another prompt</a>
+    </div>
+  </section>
+);
+
 const ProfilePage: FC<{
   facets: readonly ProfileFacet[];
   statuses: Map<FacetId, FacetStatus>;
   staleIds: ReadonlySet<string>;
   embedderConfigured: boolean;
+  factPrompt: UncoveredDocument | undefined;
+  termPrompt: VocabularyGap | undefined;
   csrfToken: string;
   error?: string;
   notice?: string;
@@ -162,6 +217,10 @@ const ProfilePage: FC<{
         No embedding API key is configured (VOYAGE_API_KEY), so facets can be authored but not
         embedded or matched.
       </Notice>
+    )}
+
+    {(props.factPrompt !== undefined || props.termPrompt !== undefined) && (
+      <WritingPrompt fact={props.factPrompt} term={props.termPrompt} />
     )}
 
     {
@@ -269,17 +328,62 @@ function isDuplicateName(error: unknown): boolean {
     (error as { code?: string }).code === "23505";
 }
 
+function pickOne<T>(items: readonly T[]): T | undefined {
+  return items.length === 0 ? undefined : items[Math.floor(Math.random() * items.length)];
+}
+
+/**
+ * The two prompt candidates (M12), reusing the Gaps machinery rather than
+ * inventing a second way to compare facts, facets and postings. See
+ * `docs/pages/profile.md` for why these two sources and not others.
+ */
+async function pickWritingPrompts(
+  services: Services,
+): Promise<{ factPrompt: UncoveredDocument | undefined; termPrompt: VocabularyGap | undefined }> {
+  const [activeFacets, facts, candidates] = await Promise.all([
+    services.facets.list().then((all) => all.filter((f) => f.active)),
+    services.facts.list(),
+    services.matches.listCandidates({}),
+  ]);
+  const profileText = activeFacets.map((f) => `${f.name}\n${f.content}`).join("\n");
+
+  const activeFacts = facts.filter((f) => f.active);
+  const factDocuments: TermDocument[] = activeFacts.map((f) => ({
+    id: f.id,
+    label: f.text,
+    text: f.text,
+  }));
+  const factPrompt = pickOne(findUncoveredDocuments(factDocuments, profileText));
+
+  const matched = new Set<PostingId>(candidates.map((candidate) => candidate.postingId));
+  const { postings } = await services.postings.list({ limit: 5_000 });
+  const scope = matched.size > 0 ? "matched" : "listed";
+  const postingDocuments: TermDocument[] = postings
+    .filter((posting) => scope === "listed" || matched.has(posting.id))
+    .map((posting) => ({ id: posting.id, label: posting.title, text: posting.descriptionText }));
+  const dossierText = activeFacts
+    .map((f) => `${f.text}\n${f.organization ?? ""}\n${f.tags.join("\n")}`)
+    .join("\n");
+  const report = findVocabularyGaps(postingDocuments, profileText, dossierText, {
+    minPostings: DEFAULT_VOCABULARY_OPTIONS.minPostings,
+  });
+  const termPrompt = pickOne(report.gaps.filter((gap) => gapKind(gap) === "unknown-territory"));
+
+  return { factPrompt, termPrompt };
+}
+
 export const profileRoutes = new Hono<AppEnv>();
 
 profileRoutes.get("/profile", async (c) => {
   const services = c.get("services");
   const model = services.embedder?.model;
-  const [facets, statuses, staleFacets] = await Promise.all([
+  const [facets, statuses, staleFacets, prompts] = await Promise.all([
     services.facets.list(),
     model !== undefined
       ? services.chunks.facetEmbedStatus(model)
       : Promise.resolve(new Map<FacetId, FacetStatus>()),
     model !== undefined ? services.facets.staleForModel(model) : Promise.resolve([]),
+    pickWritingPrompts(services),
   ]);
 
   const error = c.req.query("error");
@@ -290,6 +394,8 @@ profileRoutes.get("/profile", async (c) => {
       statuses={statuses}
       staleIds={new Set(staleFacets.map((f) => f.id as string))}
       embedderConfigured={services.embedder !== null}
+      factPrompt={prompts.factPrompt}
+      termPrompt={prompts.termPrompt}
       csrfToken={c.get("csrfToken")}
       {...(error !== undefined ? { error } : {})}
       {...(notice !== undefined ? { notice } : {})}
