@@ -228,8 +228,23 @@ export interface BoardCandidateRepo {
 export const HIT_TTL_MS = 24 * 60 * 60 * 1000;
 export const MISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/**
+ * A row carrying an error is not an answer, so it gets neither TTL. It is
+ * cached only long enough to keep a struggling upstream from being asked the
+ * same question in a tight loop.
+ *
+ * The whole design turns on 404 versus everything else, and the type and the
+ * schema have always kept the two apart — but freshness did not, so a timeout
+ * was reused as a clean miss for a full week. One-name-at-a-time lookup mostly
+ * masked that, because the page offers "check again". A batch drain does not
+ * mask it at all: a single upstream blip mid-run would have poisoned every name
+ * still to come, and every one of them would have read as "not on Greenhouse".
+ */
+export const ERROR_TTL_MS = 60 * 60 * 1000;
+
 export function isFresh(candidate: BoardCandidate, now: Date): boolean {
   const age = now.getTime() - candidate.checkedAt.getTime();
+  if (candidate.error !== undefined) return age < ERROR_TTL_MS;
   return age < (candidate.found ? HIT_TTL_MS : MISS_TTL_MS);
 }
 

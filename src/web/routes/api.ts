@@ -21,6 +21,11 @@ import type { AppEnv } from "@web/types.ts";
 import { bearerFrom } from "@auth/api-token.ts";
 import { collect } from "@domain/discovery/collect.ts";
 import { embedPending } from "@domain/discovery/embed.ts";
+import {
+  DEFAULT_PROSPECT_DEADLINE_MS,
+  DEFAULT_PROSPECT_LIMIT,
+  resolveProspects,
+} from "@domain/discovery/prospect.ts";
 import { scorePending } from "@domain/discovery/match.ts";
 import { loadBucketThresholds } from "@domain/discovery/matching.ts";
 import { bucketOf } from "@domain/discovery/matching.ts";
@@ -50,6 +55,80 @@ export function bearerAuth(): MiddlewareHandler<AppEnv> {
 }
 
 export const apiRoutes = new Hono<AppEnv>();
+
+/** A bounded positive integer from the query string, or the default. */
+function boundedParam(raw: string | undefined, fallback: number, max: number): number {
+  if (raw === undefined || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.min(Math.floor(value), max);
+}
+
+/**
+ * Drain a slice of the prospect queue: ask the platforms about names somebody
+ * queued, and record every answer in the catalogue.
+ *
+ * This runs *before* collection in the pipeline, and stops short of it. A found
+ * board is not registered — the registry is the denominator for every coverage
+ * count, so what joins it stays a human decision on the find page. What this
+ * job produces is knowledge about which names have boards at all, which is the
+ * part that costs requests and time.
+ *
+ * 207 while a backlog remains, exactly as `/embed` does: more work to do is a
+ * successful partial run, and n8n can call again rather than waiting a cycle.
+ */
+apiRoutes.post("/api/jobs/prospect", async (c) => {
+  const services = c.get("services");
+
+  const report = await resolveProspects({
+    prospects: services.prospects,
+    candidates: services.boardCandidates,
+    probe: services.probeBoard,
+    sourceFor: services.sourceFor,
+    clock: services.clock,
+    logger: c.get("logger"),
+  }, {
+    limit: boundedParam(c.req.query("limit"), DEFAULT_PROSPECT_LIMIT, 200),
+    deadlineMs: boundedParam(
+      c.req.query("deadline_ms"),
+      DEFAULT_PROSPECT_DEADLINE_MS,
+      15 * 60 * 1000,
+    ),
+  });
+
+  const body = {
+    claimed: report.claimed,
+    resolved: report.resolved,
+    deferred: report.deferred,
+    boardsFound: report.hits.length,
+    stoppedEarly: report.stoppedEarly,
+    pending: report.counts.pending,
+    // Out of attempts, so nothing will pick these up again. Reported on every
+    // run because a backlog that has quietly stopped moving should not look
+    // like an empty queue (§10).
+    stuck: report.counts.stuck,
+    // The point of the run: names that turned out to have boards. Named so n8n
+    // can deliver them rather than merely counting them (§12).
+    found: report.hits,
+    resolvedToNothing: report.empty,
+    failures: report.failures,
+  };
+
+  // Nothing was claimed and nothing is waiting: the queue is empty, which is a
+  // clean run and not a partial one.
+  if (report.claimed === 0 && report.counts.pending === 0) {
+    return c.json({ ...body, status: "ok" }, 200);
+  }
+
+  // Every claimed prospect deferred means the run learned nothing at all —
+  // that is upstream being unreachable, not partial progress.
+  if (report.claimed > 0 && report.deferred === report.claimed) {
+    return c.json({ ...body, status: "failed" }, 500);
+  }
+
+  const more = report.counts.pending > 0 || report.stoppedEarly;
+  return c.json({ ...body, status: more ? "partial" : "ok" }, more ? 207 : 200);
+});
 
 /**
  * Fetch every active board, diff against the last snapshot, store.

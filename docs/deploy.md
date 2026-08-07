@@ -341,20 +341,28 @@ Then, in a browser at `https://$DOMAIN`:
 Visit **Automation**, mint a bearer token, and copy it — it is shown once and never again, because
 only its SHA-256 is stored. Point n8n at:
 
-| Route               | Method |                                                        |
-| ------------------- | ------ | ------------------------------------------------------ |
-| `/api/jobs/collect` | POST   | Fetch every active board, diff, store                  |
-| `/api/jobs/embed`   | POST   | Drain the embedding queue                              |
-| `/api/jobs/match`   | POST   | Score new and changed postings                         |
-| `/api/jobs/digest`  | GET    | New matches since `?since=` — the notification payload |
-| `/api/jobs/sweep`   | POST   | Ghost stale applications; purge expired sessions       |
+| Route                | Method |                                                        |
+| -------------------- | ------ | ------------------------------------------------------ |
+| `/api/jobs/prospect` | POST   | Ask the platforms about queued company names           |
+| `/api/jobs/collect`  | POST   | Fetch every active board, diff, store                  |
+| `/api/jobs/embed`    | POST   | Drain the embedding queue                              |
+| `/api/jobs/match`    | POST   | Score new and changed postings                         |
+| `/api/jobs/digest`   | GET    | New matches since `?since=` — the notification payload |
+| `/api/jobs/sweep`    | POST   | Ghost stale applications; purge expired sessions       |
 
 All take `Authorization: Bearer <token>`. Branch on the status code: **200** clean, **207** partial
 (the run finished but something in it failed, or there is a backlog — call again), **500** the run
 itself failed. A 207 from `collect` names the boards that failed.
 
+`prospect` takes `?limit=` (prospects per run, default 25) and `?deadline_ms=` (wall-clock budget,
+default three minutes), and 207s while the queue still has names in it — so a quarter-hourly
+schedule drains a long list without any one call running long. It stops at finding boards; nothing
+it discovers joins the registry until you promote it on **Find a board**.
+
 Be a good citizen about the schedule. The fetcher already rate-limits itself to one request per
-second and honours `Retry-After`; collecting hourly is plenty.
+second and honours `Retry-After`; collecting hourly is plenty. The prospect queue is the one that
+can generate real volume — a few hundred names is a few thousand requests — so leave it on a slow
+schedule and let it take the day it needs.
 
 ## 11. Backups
 
