@@ -22,6 +22,8 @@ import {
 } from "@domain/discovery/resolve.ts";
 import {
   type ClaimedProspect,
+  describeDrain,
+  INTERACTIVE_PROSPECT_LIMIT,
   MAX_PASTED_PROSPECTS,
   MAX_PROSPECT_ATTEMPTS,
   type NewProspect,
@@ -31,6 +33,7 @@ import {
   type ProspectOutcome,
   type ProspectQuery,
   type ProspectRepo,
+  type ProspectReport,
   resolveProspects,
 } from "@domain/discovery/prospect.ts";
 
@@ -452,4 +455,75 @@ Deno.test("queue: clearing keeps pending work and drops what was asked", async (
 
   assertEquals(await prospects.clearResolved(), 1);
   assertEquals([...prospects.rows.keys()], ["Ramp"]);
+});
+
+/* -------------------------------------------- describing a hand drain ----- */
+
+/** The interactive drain reports through this, so its branches are the contract. */
+function reportWith(over: Partial<ProspectReport>): ProspectReport {
+  return {
+    claimed: 0,
+    resolved: 0,
+    deferred: 0,
+    hits: [],
+    empty: [],
+    failures: [],
+    stoppedEarly: false,
+    counts: { pending: 0, resolved: 0, stuck: 0 },
+    ...over,
+  };
+}
+
+Deno.test("describe: an empty queue says so rather than reporting a run", () => {
+  assertEquals(describeDrain(reportWith({})), "Nothing in the queue to ask about.");
+});
+
+Deno.test("describe: found boards are counted, and one board is singular", () => {
+  const hit = {
+    query: "Esri",
+    platform: "greenhouse" as Platform,
+    slug: "esri",
+  };
+  assertEquals(
+    describeDrain(reportWith({ claimed: 1, resolved: 1, hits: [hit] })),
+    "Asked about 1 name · found 1 board",
+  );
+  assertEquals(
+    describeDrain(reportWith({ claimed: 2, resolved: 2, hits: [hit, { ...hit, slug: "esrihq" }] })),
+    "Asked about 2 names · found 2 boards",
+  );
+});
+
+Deno.test("describe: finding nothing does not read as failing to ask", () => {
+  assertEquals(
+    describeDrain(reportWith({ claimed: 3, resolved: 3 })),
+    "Asked about 3 names · found no boards",
+  );
+});
+
+Deno.test("describe: unreachable names are named apart from boards that do not exist", () => {
+  const message = describeDrain(
+    reportWith({
+      claimed: 3,
+      resolved: 2,
+      deferred: 1,
+      counts: { pending: 1, resolved: 2, stuck: 0 },
+    }),
+  );
+  assertEquals(
+    message,
+    "Asked about 3 names · found no boards · 1 name could not be reached and stayed queued · " +
+      "1 still queued — ask again to continue",
+  );
+});
+
+Deno.test("describe: a remaining backlog invites another click, so a bound is not a bug", () => {
+  const message = describeDrain(
+    reportWith({
+      claimed: INTERACTIVE_PROSPECT_LIMIT,
+      resolved: INTERACTIVE_PROSPECT_LIMIT,
+      counts: { pending: 40, resolved: INTERACTIVE_PROSPECT_LIMIT, stuck: 0 },
+    }),
+  );
+  assertEquals(message.endsWith("40 still queued — ask again to continue"), true, message);
 });

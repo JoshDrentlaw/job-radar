@@ -124,6 +124,19 @@ export const DEFAULT_PROSPECT_LIMIT = 25;
 export const DEFAULT_PROSPECT_DEADLINE_MS = 3 * 60 * 1000;
 
 /**
+ * The budget for a drain someone is watching, as opposed to one a schedule
+ * runs. Small on purpose: a prospect costs about four seconds, so five is
+ * roughly twenty — a slow page load rather than an abandoned one. The page says
+ * how many are left and offers to go again, which is the same bargain
+ * `/matches/refresh` strikes with the embedding backlog.
+ *
+ * This exists so the queue is usable without a scheduler at all. Filling a
+ * queue you cannot drain is friction, and friction here is a bug.
+ */
+export const INTERACTIVE_PROSPECT_LIMIT = 5;
+export const INTERACTIVE_PROSPECT_DEADLINE_MS = 20 * 1000;
+
+/**
  * Attempts before a prospect stops being retried. Failures here are "we could
  * not find out", which is usually transient — but a name that has failed three
  * times is telling us something the fourth attempt will not, and a queue that
@@ -314,6 +327,34 @@ export async function resolveProspects(
     stoppedEarly,
     counts,
   };
+}
+
+/**
+ * What a drain did, in a sentence, for the page that ran it.
+ *
+ * Pure, and here rather than in the handler, because the branching is where
+ * this gets quietly wrong: "found no boards" and "could not reach anyone" are
+ * different outcomes and must not read the same, and a remaining backlog has to
+ * say so or the button looks broken when it was merely bounded.
+ */
+export function describeDrain(report: ProspectReport): string {
+  if (report.claimed === 0) return "Nothing in the queue to ask about.";
+
+  const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+  const parts = [
+    `Asked about ${plural(report.resolved + report.deferred, "name")}`,
+    report.hits.length > 0 ? `found ${plural(report.hits.length, "board")}` : "found no boards",
+  ];
+  // Named separately from the misses: "we could not reach the platform" and
+  // "there is no board there" are different answers, and the queue keeps them
+  // apart everywhere else too.
+  if (report.deferred > 0) {
+    parts.push(`${plural(report.deferred, "name")} could not be reached and stayed queued`);
+  }
+  if (report.counts.pending > 0) {
+    parts.push(`${report.counts.pending} still queued — ask again to continue`);
+  }
+  return parts.join(" · ");
 }
 
 /* ------------------------------------------------------------ parsing ----- */

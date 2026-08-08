@@ -31,11 +31,15 @@ import {
   type ResolveReport,
 } from "@domain/discovery/resolve.ts";
 import {
+  describeDrain,
+  INTERACTIVE_PROSPECT_DEADLINE_MS,
+  INTERACTIVE_PROSPECT_LIMIT,
   MAX_PASTED_PROSPECTS,
   MAX_PROSPECT_ATTEMPTS,
   parseProspectList,
   type Prospect,
   type ProspectCounts,
+  resolveProspects,
 } from "@domain/discovery/prospect.ts";
 
 /** Platforms with an adapter today. The rest are listed but not selectable. */
@@ -364,6 +368,19 @@ const QueuePanel: FC<{
             </>
           )}
         </p>
+
+        {props.counts.pending > 0 && (
+          <form method="post" action="/boards/prospects/drain" class="gap-above">
+            <CsrfField token={props.csrfToken} />
+            <button type="submit">Ask about the next {INTERACTIVE_PROSPECT_LIMIT}</button>
+            <p class="field-hint">
+              Asks now, while you wait — about {INTERACTIVE_PROSPECT_LIMIT}{" "}
+              names, which takes around {Math.round(INTERACTIVE_PROSPECT_DEADLINE_MS / 1000)}{" "}
+              seconds. A long queue is better left to the <code>prospect</code>{" "}
+              job on a schedule; this is here so the queue works without one.
+            </p>
+          </form>
+        )}
 
         {props.pending.length > 0 && (
           <ul class="tag-list gap-above">
@@ -812,6 +829,30 @@ boardRoutes.post("/boards/prospects", async (c) => {
     `Queued ${added} name${added === 1 ? "" : "s"}` +
       (already > 0 ? `; ${already} ${already === 1 ? "was" : "were"} already queued.` : "."),
   );
+});
+
+/**
+ * Drain a few by hand, for an installation with no scheduler pointed at
+ * `/api/jobs/prospect` yet. The same use case the job route runs, on a budget
+ * sized for a page load — exactly how `/matches/refresh` reuses the embed and
+ * match jobs (M6).
+ */
+boardRoutes.post("/boards/prospects/drain", async (c) => {
+  const services = c.get("services");
+
+  const report = await resolveProspects({
+    prospects: services.prospects,
+    candidates: services.boardCandidates,
+    probe: services.probeBoard,
+    sourceFor: services.sourceFor,
+    clock: services.clock,
+    logger: c.get("logger"),
+  }, {
+    limit: INTERACTIVE_PROSPECT_LIMIT,
+    deadlineMs: INTERACTIVE_PROSPECT_DEADLINE_MS,
+  });
+
+  return c.redirect(`/boards/find?notice=${encodeURIComponent(describeDrain(report))}`, 303);
 });
 
 /** Empty the asked rows out of the queue. The catalogue keeps the answers. */
