@@ -536,6 +536,13 @@ while a backlog remains**, so the scheduler calls again rather than waiting a fu
 end a run — prospects claimed and wall-clock elapsed — because a count alone is not safe when a
 struggling upstream turns every probe into a retry with backoff.
 
+**It works without a scheduler.** `/api/jobs/prospect` is the way to drain a few hundred names, but
+an installation with nothing pointed at it yet would have a queue it could fill and not empty — and
+a queue you cannot drain is precisely the friction the find page exists to remove. So the panel also
+has **Ask about the next 5**, which runs the same use case on a budget sized for a page load, the
+same way `/matches/refresh` reuses the embed and match jobs. Every job route except `sweep` now has
+a button behind it.
+
 **The queue holds questions; the catalogue holds answers.** Draining a prospect writes to
 `discovery.board_candidates`, which M9 already built to record hits and misses alike, so clearing
 the queue costs nothing and re-queuing a name asked about last month is answered from cache. It also

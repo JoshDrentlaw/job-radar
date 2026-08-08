@@ -46,9 +46,12 @@ confirmation says how many were new versus already there. Names already asked ab
 from the catalogue rather than re-probed.
 
 Below the form: how many are **waiting**, how many have been **asked**, and — only when it happens —
-how many **gave up** after three attempts. That last count is separate on purpose; a queue that has
-quietly stopped moving must not look like an empty one. "Clear the N already asked" empties the
-queue only. Every answer stays in the catalogue, so clearing costs nothing.
+how many **gave up** after three attempts. **Ask about the next 5** drains a few by hand, right
+there, in about twenty seconds — it exists so the queue is usable before you've pointed a scheduler
+at `/api/jobs/prospect`, and the notice tells you how many are left. A long list is better left to
+the job. That last count is separate on purpose; a queue that has quietly stopped moving must not
+look like an empty one. "Clear the N already asked" empties the queue only. Every answer stays in
+the catalogue, so clearing costs nothing.
 
 Found boards show up in the catalogue at the bottom of the page like any other hit, and registering
 one is still a click you make.

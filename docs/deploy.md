@@ -354,6 +354,15 @@ All take `Authorization: Bearer <token>`. Branch on the status code: **200** cle
 (the run finished but something in it failed, or there is a backlog — call again), **500** the run
 itself failed. A 207 from `collect` names the boards that failed.
 
+Only `prospect` and `sweep` have no equivalent button in the app — everything else can be run by
+hand (**Fetch all active boards** on `/boards`, **Refresh matches** on `/matches`), so a scheduler
+is a convenience rather than a requirement. `prospect` has a small one: **Ask about the next 5** on
+the find page drains a handful inline. `sweep` is only hygiene — without it, applications stay in
+`sent` rather than flipping to `ghosted`, and already-expired sessions linger as rows.
+
+If you are not running n8n, cron and curl cover the scheduling half of all of this; what you give up
+is the delivery half, which is the part n8n is actually for.
+
 `prospect` takes `?limit=` (prospects per run, default 25) and `?deadline_ms=` (wall-clock budget,
 default three minutes), and 207s while the queue still has names in it — so a quarter-hourly
 schedule drains a long list without any one call running long. It stops at finding boards; nothing
