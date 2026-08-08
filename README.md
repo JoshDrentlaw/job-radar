@@ -55,6 +55,7 @@ has its own short tutorial — start there for how to actually use the thing.
 | **M9 — Board lookup**     | Done. Name a company, get its board. Slug guessing, cheap probes, an accumulating catalogue.  |
 | **M11 — Seed a resume**   | Done. Paste a resume, review extracted facts, add only what you check.                        |
 | **M12 — Writing prompts** | Done. Two nudges on Profile, pulled from the Gaps machinery, not new logic.                   |
+| **M13 — Prospect queue**  | Done. Paste a list of company names; a job route asks about them in bounded slices.           |
 
 ## Stack
 
@@ -298,9 +299,10 @@ fact set and variants work by hand, which is how M4 proved the data model.
 
 ### Pipeline and the n8n boundary (M6)
 
-**The app owns the work; n8n owns the schedule and the delivery.** Five routes under `/api/jobs/` do
-the work — `collect`, `embed`, `match`, `sweep`, and a read-only `digest` — and none of them knows
-what a notification is. Everything they need to decide anything is in the JSON they return.
+**The app owns the work; n8n owns the schedule and the delivery.** Six routes under `/api/jobs/` do
+the work — `prospect`, `collect`, `embed`, `match`, `sweep`, and a read-only `digest` — and none of
+them knows what a notification is. Everything they need to decide anything is in the JSON they
+return.
 
 **The status code is the contract.** 200 clean, **207 partial**, 500 the run itself failed, so n8n
 branches on the response rather than parsing prose. A collection run where one board 503s is a 207
@@ -508,7 +510,70 @@ catalogue for a week, so the two are kept apart in the type, in the schema, and 
 **Decided against: bulk paste.** Twenty company names is eighty requests per host — well past what
 belongs in a page load, and it would want the job-route pattern the rest of the long work already
 uses to do properly. Weighed against a single-user tool adding boards one at a time anyway, it
-wasn't worth the added surface, so `/boards/find` stays a one-name-at-a-time lookup.
+wasn't worth the added surface, so `/boards/find` stays a one-name-at-a-time _lookup_.
+
+_Revisited in M13, and the reasoning held._ Bulk paste never became a page load; it became a queue
+and a job route, which is what "it would want the job-route pattern" was pointing at all along.
+
+### Asking about names you do not have yet (M13)
+
+M9 made looking up one company easy, which exposed the real problem: **you have to already know who
+to ask about.** These three platforms host venture-backed and mid-market companies almost by
+definition — the household names you can think of unprompted are on Workday or Taleo and will never
+appear here. Every name you can produce from memory is close to a guaranteed miss, and the names
+that would hit are ones you have never heard of.
+
+So the useful unit of work stopped being "look up Stripe" and became "here are three hundred names
+off a portfolio page, tell me which of them have boards". Three hundred names is roughly twelve
+hundred requests per host at one per second — about twenty minutes. M9 declined bulk paste for
+exactly this reason and was right to: it does not belong in a page load. It belongs in the job
+routes, which is where the rest of the long work already lives.
+
+`discovery.prospects` is a queue of questions. Pasting a list **writes rows and touches no
+network**, so three hundred names return as fast as one, and `POST /api/jobs/prospect` drains a
+bounded slice on whatever schedule n8n keeps. The contract is `embed`'s, not `collect`'s: **207
+while a backlog remains**, so the scheduler calls again rather than waiting a full cycle. Two bounds
+end a run — prospects claimed and wall-clock elapsed — because a count alone is not safe when a
+struggling upstream turns every probe into a retry with backoff.
+
+**The queue holds questions; the catalogue holds answers.** Draining a prospect writes to
+`discovery.board_candidates`, which M9 already built to record hits and misses alike, so clearing
+the queue costs nothing and re-queuing a name asked about last month is answered from cache. It also
+means a retry is cheap: a name that failed because Ashby timed out re-asks only Ashby, because the
+Greenhouse and Lever answers are already recorded.
+
+**Nothing discovered joins the registry.** A found board is a row in the catalogue and a chip on the
+find page; promoting it is still a human clicking, exactly as before. This is the one deliberate
+piece of friction in the feature, and it is there because the registry is the denominator for every
+coverage count in the application — a harvest that auto-registered five hundred boards would not
+just cost five hundred fetches a run, it would silently change what every percentage on the coverage
+page means. Harvest wide, register narrow.
+
+**The 404-versus-everything-else distinction, carried up a layer.** A platform answering "no board"
+resolves a prospect permanently — re-asking learns the same nothing. A platform failing to answer
+leaves it pending, and the next run picks it up. Conflating the two would either strand names that
+were never really asked about or re-ask names that were definitively answered. Attempts are capped
+so a queue always drains, and a name that runs out is counted as **stuck** rather than folded into
+pending, because a backlog that has quietly stopped moving must not read as an empty one (§10).
+
+Two things this milestone had to fix in M9 to be safe at volume:
+
+- **An error was being cached as a miss for a week.** The type, the schema and the page all kept "no
+  board" and "could not find out" apart, but `isFresh` did not — an errored candidate has
+  `found = false`, so it was trusted for the full miss TTL. One-at-a-time lookup mostly masked this
+  because the page offers "check again". A batch drain does not mask it at all: a single upstream
+  blip mid-run would have poisoned every name still to come, each one reading as "not on
+  Greenhouse". Errors now get their own short TTL.
+- **A deadline-stopped run was charging its unasked rows an attempt.** Claiming leases a slice and
+  increments attempts up front; stopping early left the remainder leased and one attempt poorer, so
+  three consecutive slow runs could retire a name to `stuck` without a single request ever having
+  been made about it. A run now hands back what it did not get to, intact.
+
+**Where the names come from is deliberately not the app's problem.** VC and accelerator portfolio
+pages are the highest-yield source for this demographic, but scraping them here would break the rule
+that every adapter in this project was written against live data fetched from the source that owns
+it. Paste is the boundary: bring names however you like, and this answers the one question the ATS
+platforms actually expose.
 
 ### Seeding the dossier from a resume (M11)
 

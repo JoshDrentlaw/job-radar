@@ -26,6 +26,33 @@ recorded in a running catalogue at the bottom of the page, so "Spotify isn't on 
 to be discovered once. One click on a result adds it with platform, slug, and — on a Greenhouse hit
 — the company name, all pre-filled.
 
+## Asking about a whole list
+
+The lookup above assumes you know who to ask about. Mostly you won't — these platforms host
+venture-backed and mid-market companies, so the names you can think of unprompted (Walmart,
+McDonald's) are on Workday or Taleo and will never appear, while the ones that would hit are
+companies you've never heard of. Names realistically arrive a few hundred at a time, off a VC
+portfolio page or a spreadsheet column.
+
+**Ask about a list** takes one name per line. Pasting queues them and nothing more — no network, so
+a three-hundred-name list submits instantly. The asking is done by the `prospect` job on whatever
+schedule you've set, one request per second per platform, in bounded slices. Blank lines, `#`
+comments, trailing commas and wrapping quotes are all stripped, so a column pasted straight out of a
+spreadsheet works as-is. **Source** is optional free text ("a16z portfolio", "YC W24") and exists so
+you can see which harvest is actually yielding boards and stop feeding the ones that aren't.
+
+Re-pasting an overlapping list is normal and cheap: names already queued are skipped, and the
+confirmation says how many were new versus already there. Names already asked about are answered
+from the catalogue rather than re-probed.
+
+Below the form: how many are **waiting**, how many have been **asked**, and — only when it happens —
+how many **gave up** after three attempts. That last count is separate on purpose; a queue that has
+quietly stopped moving must not look like an empty one. "Clear the N already asked" empties the
+queue only. Every answer stays in the catalogue, so clearing costs nothing.
+
+Found boards show up in the catalogue at the bottom of the page like any other hit, and registering
+one is still a click you make.
+
 ## Managing a registered board
 
 Each row: **Fetch now** (fetches just that board), an **Activate/Deactivate** toggle (deactivating
@@ -63,8 +90,8 @@ the record itself, not a board that returned nothing.
   Coverage-tab problem.
 - One failing board never aborts a run — the rest still get fetched, and the failure is recorded
   with a reason rather than silently dropping that board's contribution to the totals.
-- Bulk paste (resolving a list of company names in one pass) was scoped out deliberately — see the
-  README for why.
+- A found board is never registered for you, including by the queue. The registry is the denominator
+  for every count in the app, so what joins it stays a decision you made.
 
 ## Elsewhere
 

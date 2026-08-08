@@ -12,6 +12,7 @@ import { migrateUp } from "@platform/migrate.ts";
 
 import { PostgresBoardRepo } from "@adapters/db/board-repo.ts";
 import { PostgresBoardCandidateRepo } from "@adapters/db/board-candidate-repo.ts";
+import { PostgresProspectRepo } from "@adapters/db/prospect-repo.ts";
 import { PostgresPostingRepo } from "@adapters/db/posting-repo.ts";
 import { PostgresSnapshotRepo } from "@adapters/db/snapshot-repo.ts";
 import { PostgresCollectionRunRepo } from "@adapters/db/collection-run-repo.ts";
@@ -93,6 +94,7 @@ if (llm === null) {
 const services: Services = {
   boards: new PostgresBoardRepo(sql),
   boardCandidates: new PostgresBoardCandidateRepo(sql),
+  prospects: new PostgresProspectRepo(sql),
   probeBoard: (platform, slug) => prober.probe(platform, slug),
   postings: new PostgresPostingRepo(sql),
   snapshots: new PostgresSnapshotRepo(sql),

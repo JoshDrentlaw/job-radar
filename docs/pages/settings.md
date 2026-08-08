@@ -28,10 +28,10 @@ to sign back in. There's no route to remove the password itself.
 
 ## Automation
 
-`/automation` — bearer tokens for the `/api/jobs/*` routes n8n calls on a schedule: `collect`,
-`embed`, `match`, `sweep`, and a read-only `digest`. These routes authenticate with a token, never
-the session cookie — a token here grants nothing on the rest of the app, and the session cookie
-grants nothing here.
+`/automation` — bearer tokens for the `/api/jobs/*` routes n8n calls on a schedule: `prospect`,
+`collect`, `embed`, `match`, `sweep`, and a read-only `digest`. These routes authenticate with a
+token, never the session cookie — a token here grants nothing on the rest of the app, and the
+session cookie grants nothing here.
 
 ### Using it
 

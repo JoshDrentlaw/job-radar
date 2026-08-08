@@ -45,6 +45,13 @@ import type {
   CollectionRunRepo,
 } from "@domain/discovery/coverage.ts";
 import type { MatchCandidate, MatchRepo, SettingsRepo } from "@domain/discovery/matching.ts";
+import type {
+  ClaimedProspect,
+  Prospect,
+  ProspectCounts,
+  ProspectOutcome,
+  ProspectRepo,
+} from "@domain/discovery/prospect.ts";
 import {
   type ApplicationRepo,
   type ApplicationStatus,
@@ -590,4 +597,155 @@ Deno.test("embed and match are 500 when no embedder is configured, not a silent 
     assertEquals(res.status, 500, path);
     assertEquals((await res.json()).status, "disabled");
   }
+});
+
+/* ------------------------------------------------ prospect queue ---------- */
+
+/**
+ * The queue reduced to what the status contract actually reads: what is claimed
+ * and what remains. Attempt limits and leases are the domain's business and are
+ * pinned in `prospect_test.ts`.
+ */
+class FakeProspects implements ProspectRepo {
+  readonly pending: string[];
+  readonly settled: { query: string; kind: string }[] = [];
+
+  constructor(pending: readonly string[]) {
+    this.pending = [...pending];
+  }
+  enqueue(): Promise<number> {
+    return Promise.resolve(0);
+  }
+  claim(limit: number): Promise<ClaimedProspect[]> {
+    return Promise.resolve(
+      this.pending.slice(0, limit).map((query) => ({ query, attempts: 1 })),
+    );
+  }
+  settle(query: string, outcome: ProspectOutcome): Promise<void> {
+    this.settled.push({ query, kind: outcome.kind });
+    if (outcome.kind === "resolved") {
+      const at = this.pending.indexOf(query);
+      if (at !== -1) this.pending.splice(at, 1);
+    }
+    return Promise.resolve();
+  }
+  release(): Promise<void> {
+    return Promise.resolve();
+  }
+  counts(): Promise<ProspectCounts> {
+    return Promise.resolve({
+      pending: this.pending.length,
+      resolved: this.settled.filter((s) => s.kind === "resolved").length,
+      stuck: 0,
+    });
+  }
+  list(): Promise<Prospect[]> {
+    return Promise.resolve([]);
+  }
+  clearResolved(): Promise<number> {
+    return Promise.resolve(0);
+  }
+}
+
+const NOOP_CANDIDATES: Services["boardCandidates"] = {
+  lookup: () => Promise.resolve([]),
+  record: () => Promise.resolve(),
+  recent: () => Promise.resolve([]),
+};
+
+/**
+ * A board that reads as empty. It has to exist: only platforms with an adapter
+ * are probed at all, so a `sourceFor` returning null everywhere would ask
+ * nothing and every prospect would resolve to no board without a request.
+ */
+const PROSPECT_SOURCE: BoardSource = {
+  platform: "greenhouse",
+  adapterVersion: "test/1",
+  fetchBoard: () =>
+    Promise.resolve({
+      sourceUrl: "https://example.invalid/board",
+      fetchedAt: new Date(NOW),
+      postings: [],
+    }),
+};
+
+async function prospectHarness(
+  pending: readonly string[],
+  probe: Services["probeBoard"],
+): Promise<Harness & { prospects: FakeProspects }> {
+  const prospects = new FakeProspects(pending);
+  const app = await harness({
+    prospects,
+    boardCandidates: NOOP_CANDIDATES,
+    probeBoard: probe,
+    sourceFor: (platform) =>
+      (["greenhouse", "lever", "ashby"] as string[]).includes(platform) ? PROSPECT_SOURCE : null,
+  });
+  return { ...app, prospects };
+}
+
+Deno.test("prospect: an empty queue is 200, not a partial run", async () => {
+  const app = await prospectHarness([], () => Promise.resolve({ found: false }));
+  const res = await app.request("/api/jobs/prospect?limit=5", authed(app.token));
+  assertEquals(res.status, 200);
+
+  const body = await res.json();
+  assertEquals(body.status, "ok");
+  assertEquals(body.claimed, 0);
+  assertEquals(body.pending, 0);
+});
+
+Deno.test("prospect: a drained slice with a backlog left is 207", async () => {
+  const app = await prospectHarness(
+    ["Esri", "Ramp", "Linear"],
+    (platform, slug) => Promise.resolve({ found: platform === "greenhouse" && slug === "esri" }),
+  );
+  const res = await app.request("/api/jobs/prospect?limit=1", authed(app.token));
+  assertEquals(res.status, 207);
+
+  const body = await res.json();
+  assertEquals(body.status, "partial");
+  assertEquals(body.claimed, 1);
+  assertEquals(body.resolved, 1);
+  assertEquals(body.boardsFound, 1);
+  assertEquals(body.found[0].slug, "esri");
+  // The names it did not get to are reported, so n8n calls again rather than
+  // waiting a full cycle.
+  assertEquals(body.pending, 2);
+});
+
+Deno.test("prospect: draining the last of the queue is 200", async () => {
+  const app = await prospectHarness(["Walmart"], () => Promise.resolve({ found: false }));
+  const res = await app.request("/api/jobs/prospect", authed(app.token));
+  assertEquals(res.status, 200);
+
+  const body = await res.json();
+  assertEquals(body.status, "ok");
+  assertEquals(body.resolved, 1);
+  // No board anywhere is an answer, and it is reported as one rather than as
+  // a failure — it is the common case for a harvested name.
+  assertEquals(body.boardsFound, 0);
+  assertEquals(body.resolvedToNothing, ["Walmart"]);
+  assertEquals(body.failures, []);
+});
+
+Deno.test("prospect: every claimed name failing to answer is 500, not partial", async () => {
+  const app = await prospectHarness(
+    ["Esri", "Ramp"],
+    () => Promise.resolve({ found: false, error: "Upstream error (503)." }),
+  );
+  const res = await app.request("/api/jobs/prospect", authed(app.token));
+  assertEquals(res.status, 500);
+
+  const body = await res.json();
+  assertEquals(body.status, "failed");
+  assertEquals(body.deferred, 2);
+  // Nothing was resolved, so the queue is exactly as long as it was.
+  assertEquals(body.pending, 2);
+  assert(String(body.failures[0].reason).includes("503"));
+});
+
+Deno.test("prospect: the queue is bearer-gated like every other job route", async () => {
+  const app = await prospectHarness([], () => Promise.resolve({ found: false }));
+  assertEquals((await app.request("/api/jobs/prospect", { method: "POST" })).status, 401);
 });

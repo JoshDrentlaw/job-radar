@@ -30,6 +30,13 @@ import {
   resolveBoards,
   type ResolveReport,
 } from "@domain/discovery/resolve.ts";
+import {
+  MAX_PASTED_PROSPECTS,
+  MAX_PROSPECT_ATTEMPTS,
+  parseProspectList,
+  type Prospect,
+  type ProspectCounts,
+} from "@domain/discovery/prospect.ts";
 
 /** Platforms with an adapter today. The rest are listed but not selectable. */
 const IMPLEMENTED: ReadonlySet<string> = new Set(["greenhouse", "lever", "ashby"]);
@@ -279,14 +286,128 @@ const CandidateRow: FC<{
   </div>
 );
 
+/**
+ * The queue, and the paste that fills it.
+ *
+ * The one-at-a-time lookup above assumes you know who to ask about. Mostly you
+ * do not — these platforms host companies you have never heard of, and the way
+ * you get names is a portfolio page or a spreadsheet column, three hundred at a
+ * time. Pasting that here writes rows and nothing else: no network, so it
+ * returns instantly, and the asking happens on the schedule.
+ */
+const QueuePanel: FC<{
+  counts: ProspectCounts;
+  pending: readonly Prospect[];
+  csrfToken: string;
+}> = (props) => (
+  <section class="panel">
+    <header>
+      <h2>Ask about a list</h2>
+    </header>
+    <p class="panel-note">
+      One name per line. Nothing is asked now — names are queued and drained by the{" "}
+      <code>prospect</code>{" "}
+      job, one request per second per platform, so a long list costs the feeds no more than a short
+      one. Found boards appear in the catalogue below; registering one is still yours to do.
+    </p>
+
+    <form method="post" action="/boards/prospects" class="stack gap-above">
+      <CsrfField token={props.csrfToken} />
+      <Field
+        wide
+        label="Company names"
+        for="prospect-list"
+        hint={`Up to ${MAX_PASTED_PROSPECTS} at a time. Blank lines and # comments are ignored, ` +
+          `as are trailing commas — paste a spreadsheet column as it comes.`}
+      >
+        <textarea
+          id="prospect-list"
+          name="names"
+          rows={6}
+          required
+          placeholder={PROSPECT_PLACEHOLDER}
+        >
+        </textarea>
+      </Field>
+      <div class="field-row">
+        <Field
+          label="Source"
+          for="prospect-source"
+          hint="Optional. Which harvest these came from, so a dry one is visible."
+        >
+          <input
+            id="prospect-source"
+            name="source"
+            type="text"
+            placeholder="a16z portfolio"
+            maxlength={100}
+          />
+        </Field>
+        <FieldActions>
+          <button type="submit" class="primary">Queue them</button>
+        </FieldActions>
+      </div>
+    </form>
+
+    {(props.counts.pending > 0 || props.counts.resolved > 0 || props.counts.stuck > 0) && (
+      <div class="gap-above">
+        <p class="meta-line">
+          <Asserted>{props.counts.pending}</Asserted> waiting ·{" "}
+          <Asserted>{props.counts.resolved}</Asserted> asked
+          {props.counts.stuck > 0 && (
+            <>
+              {" · "}
+              <span class="warn-text">
+                <Asserted>{props.counts.stuck}</Asserted> gave up after {MAX_PROSPECT_ATTEMPTS}{" "}
+                attempts
+              </span>
+            </>
+          )}
+        </p>
+
+        {props.pending.length > 0 && (
+          <ul class="tag-list gap-above">
+            {props.pending.map((prospect) => (
+              <li key={prospect.query}>
+                <span
+                  class={`chip ${prospect.attempts >= MAX_PROSPECT_ATTEMPTS ? "warn" : "muted"}`}
+                  {...(prospect.lastError !== undefined ? { title: prospect.lastError } : {})}
+                >
+                  {prospect.query}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {props.counts.resolved > 0 && (
+          <form method="post" action="/boards/prospects/clear" class="gap-above">
+            <CsrfField token={props.csrfToken} />
+            <button type="submit" class="quiet">
+              Clear the {props.counts.resolved} already asked
+            </button>
+            <p class="field-hint">
+              Only empties the queue. Every answer stays in the catalogue, so clearing costs nothing
+              and re-queuing a cleared name is still free.
+            </p>
+          </form>
+        )}
+      </div>
+    )}
+  </section>
+);
+
 const FindPage: FC<{
   query: string;
   report: ResolveReport | null;
   registered: ReadonlySet<string>;
   catalogue: readonly BoardCandidate[];
+  queue: ProspectCounts;
+  pending: readonly Prospect[];
   csrfToken: string;
   now: Date;
   error?: string;
+  notice?: string;
 }> = (props) => {
   const hits = props.report?.results.filter((r) => r.found) ?? [];
   const misses = props.report?.results.filter((r) => !r.found) ?? [];
@@ -305,6 +426,7 @@ const FindPage: FC<{
       </div>
 
       {props.error !== undefined && <Notice kind="error">{props.error}</Notice>}
+      {props.notice !== undefined && <Notice kind="ok">{props.notice}</Notice>}
 
       <section class="panel">
         <form method="get" action="/boards/find" class="stack">
@@ -393,6 +515,8 @@ const FindPage: FC<{
           )}
         </section>
       )}
+
+      <QueuePanel counts={props.queue} pending={props.pending} csrfToken={props.csrfToken} />
 
       {props.catalogue.length > 0 && (
         <section class="panel">
@@ -587,6 +711,12 @@ boardRoutes.post("/boards", async (c) => {
 /** How much of the accumulated catalogue the find page shows. */
 const CATALOGUE_LIMIT = 24;
 
+/** How much of the waiting queue the find page shows. Enough to see it moving. */
+const PENDING_LIMIT = 30;
+
+/** A literal, so the newlines survive into the textarea rather than being escaped. */
+const PROSPECT_PLACEHOLDER = "Ramp\nLinear\nVercel";
+
 /*
  * Registered before `/boards/:id` so the literal path is not read as a board id.
  *
@@ -599,10 +729,13 @@ boardRoutes.get("/boards/find", async (c) => {
   const services = c.get("services");
   const query = (c.req.query("q") ?? "").trim();
   const refresh = c.req.query("refresh") === "1";
+  const notice = c.req.query("notice");
 
-  const [boards, catalogue] = await Promise.all([
+  const [boards, catalogue, queue, pending] = await Promise.all([
     services.boards.list(),
     services.boardCandidates.recent(CATALOGUE_LIMIT),
+    services.prospects.counts(MAX_PROSPECT_ATTEMPTS),
+    services.prospects.list({ limit: PENDING_LIMIT, pendingOnly: true }),
   ]);
   const registered = new Set(boards.map((board) => `${board.platform}:${board.slug}`));
 
@@ -639,10 +772,54 @@ boardRoutes.get("/boards/find", async (c) => {
       report={report}
       registered={registered}
       catalogue={catalogue}
+      queue={queue}
+      pending={pending}
       csrfToken={c.get("csrfToken")}
       now={services.clock.now()}
       {...(error !== undefined ? { error } : {})}
+      {...(notice !== undefined ? { notice } : {})}
     />,
+  );
+});
+
+/**
+ * Queue a pasted list. A row insert per name and no network at all, so three
+ * hundred names return as fast as one — the asking is the prospect job's, and
+ * doing it here would be the page load M9 declined to build.
+ */
+boardRoutes.post("/boards/prospects", async (c) => {
+  const services = c.get("services");
+  const form = await c.req.formData();
+  const names = parseProspectList(String(form.get("names") ?? ""));
+  const source = String(form.get("source") ?? "").trim().slice(0, 100);
+
+  const back = (key: "notice" | "error", message: string) =>
+    c.redirect(`/boards/find?${key}=${encodeURIComponent(message)}`, 303);
+
+  if (names.length === 0) {
+    return back("error", "There were no usable names in that list.");
+  }
+
+  const added = await services.prospects.enqueue(
+    names.map((query) => (source === "" ? { query } : { query, source })),
+  );
+  // The difference between the two counts is the point: re-pasting an
+  // overlapping list is the normal way to use this, and saying only "queued 12"
+  // would leave the other 288 looking lost.
+  const already = names.length - added;
+  return back(
+    "notice",
+    `Queued ${added} name${added === 1 ? "" : "s"}` +
+      (already > 0 ? `; ${already} ${already === 1 ? "was" : "were"} already queued.` : "."),
+  );
+});
+
+/** Empty the asked rows out of the queue. The catalogue keeps the answers. */
+boardRoutes.post("/boards/prospects/clear", async (c) => {
+  const cleared = await c.get("services").prospects.clearResolved();
+  return c.redirect(
+    `/boards/find?notice=${encodeURIComponent(`Cleared ${cleared} from the queue.`)}`,
+    303,
   );
 });
 

@@ -16,6 +16,7 @@ import type {
   SnapshotRepo,
 } from "@domain/discovery/types.ts";
 import type { BoardCandidateRepo, BoardProbe } from "@domain/discovery/resolve.ts";
+import type { ProspectRepo } from "@domain/discovery/prospect.ts";
 import type {
   ChunkRepo,
   Embedder,
@@ -38,6 +39,8 @@ export interface Services {
   readonly boards: BoardRegistry;
   /** The accumulated catalogue of "is there a board at this name?" answers. */
   readonly boardCandidates: BoardCandidateRepo;
+  /** Company names queued to be asked about, drained by /api/jobs/prospect. */
+  readonly prospects: ProspectRepo;
   readonly probeBoard: BoardProbe;
   readonly postings: PostingRepo;
   readonly snapshots: SnapshotRepo;
