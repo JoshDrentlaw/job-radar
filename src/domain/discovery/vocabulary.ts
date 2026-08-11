@@ -22,6 +22,12 @@ export interface TermDocument {
   readonly id: string;
   readonly label: string;
   readonly text: string;
+  /**
+   * Groups documents that share the same template — a board id, in practice.
+   * Only documents with the same `groupId` are compared for boilerplate
+   * (§ stripBoilerplate); documents with no `groupId` are never stripped.
+   */
+  readonly groupId?: string;
 }
 
 export interface VocabularyGap {
@@ -55,6 +61,13 @@ export interface VocabularyReport {
   /** Distinct terms seen at least `minPostings` times, before the corpus filter. */
   readonly termsConsidered: number;
   readonly minPostings: number;
+  /**
+   * Segments dropped as boilerplate before terms were ever counted from them
+   * (§ stripBoilerplate) — legal disclaimers and benefits blurbs a board
+   * pastes into most of its own postings verbatim. Reported so the reader can
+   * tell "nothing to say" from "the templated text was excluded."
+   */
+  readonly boilerplateSegmentsRemoved: number;
 }
 
 export interface VocabularyOptions {
@@ -212,6 +225,112 @@ export function termsIn(text: string): Set<string> {
 }
 
 /**
+ * Boilerplate detection (§10 follow-up, real-data audit). Legal disclaimers,
+ * EEO statements, export-control notices and benefits blurbs get pasted into
+ * most or all of a board's own postings verbatim — and because they are
+ * near-universal, raw document-frequency ranking puts them first, every
+ * time, ahead of anything a term-frequency ranking exists to surface. A
+ * segment recurring in at least half of a board's own postings is templated,
+ * not written about a specific role, and is dropped before any term is ever
+ * counted from it.
+ *
+ * Grouped by `groupId` (a board id, in practice), not the whole corpus,
+ * because boilerplate is company-specific: SpaceX's ITAR paragraph is not
+ * Acme's. A group smaller than MIN_GROUP_SIZE is left untouched —
+ * "identical in two of three postings" is coincidence, not a template, and
+ * with so few postings a real, deliberately-repeated sentence looks the same
+ * as one.
+ *
+ * The boundary is coarser than SEGMENT_BREAK on purpose: SEGMENT_BREAK also
+ * splits on commas and colons, which would treat "medical, dental, and
+ * vision" as three separate candidates instead of the one templated clause
+ * they actually are. Boilerplate is compared paragraph-by-paragraph and
+ * sentence-by-sentence, not clause-by-clause.
+ */
+const BOILERPLATE_SEGMENT_BREAK = /\n{2,}|(?<=[.!?])\s+(?=[A-Z(])/;
+
+/** A board's own minimum before "recurs in half of them" means anything. */
+const BOILERPLATE_MIN_GROUP_SIZE = 10;
+
+/** Recurs in at least this share of a board's own postings — templated. */
+const BOILERPLATE_RATIO = 0.5;
+
+function segmentsOf(text: string): string[] {
+  return text.split(BOILERPLATE_SEGMENT_BREAK).map((s) => s.trim()).filter((s) => s !== "");
+}
+
+/**
+ * Folds away the differences that are formatting, not content — curly vs.
+ * straight quotes, "&" vs. "and", and the pay ranges and PTO weeks a board
+ * splices into an otherwise identical template per role or level — so that
+ * the same sentence with a different number in it is still recognized as
+ * the same sentence. What is left is compared verbatim: two independently
+ * written sentences that happen to share a number are still different
+ * sentences.
+ */
+function normalizeSegment(segment: string): string {
+  return segment
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/&/g, " and ")
+    .replace(/[\d,]*\d(?:\.\d+)?%?/g, "#")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Strips segments that recur across at least BOILERPLATE_RATIO of a group's
+ * own documents. Returns the stripped documents alongside how many segments
+ * were removed, so the caller can report it rather than silently act on it
+ * (§10's honest-limit framing: this module explains itself or it says
+ * nothing).
+ */
+export function stripBoilerplate(
+  documents: readonly TermDocument[],
+): { readonly documents: TermDocument[]; readonly removedSegments: number } {
+  const groups = new Map<string | undefined, TermDocument[]>();
+  for (const doc of documents) {
+    const list = groups.get(doc.groupId);
+    if (list === undefined) groups.set(doc.groupId, [doc]);
+    else list.push(doc);
+  }
+
+  const result: TermDocument[] = [];
+  let removedSegments = 0;
+
+  for (const [groupId, group] of groups) {
+    if (groupId === undefined || group.length < BOILERPLATE_MIN_GROUP_SIZE) {
+      result.push(...group);
+      continue;
+    }
+
+    const perDoc = group.map((doc) => segmentsOf(doc.text));
+    const counts = new Map<string, number>();
+    for (const segments of perDoc) {
+      for (const normalized of new Set(segments.map(normalizeSegment))) {
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+      }
+    }
+
+    const threshold = Math.ceil(group.length * BOILERPLATE_RATIO);
+    const boilerplate = new Set(
+      [...counts.entries()].filter(([, count]) => count >= threshold).map(([key]) => key),
+    );
+
+    group.forEach((doc, index) => {
+      const kept = perDoc[index]!.filter((segment) => !boilerplate.has(normalizeSegment(segment)));
+      removedSegments += perDoc[index]!.length - kept.length;
+      result.push(
+        kept.length === perDoc[index]!.length ? doc : { ...doc, text: kept.join("\n\n") },
+      );
+    });
+  }
+
+  return { documents: result, removedSegments };
+}
+
+/**
  * Terms recurring in the postings and absent from what you have written.
  *
  * Document frequency, not term frequency: a posting that says "kubernetes"
@@ -230,8 +349,10 @@ export function findVocabularyGaps(
   const profileTerms = termsIn(profileText);
   const dossierTerms = termsIn(dossierText);
 
+  const { documents: stripped, removedSegments } = stripBoilerplate(postings);
+
   const seen = new Map<string, { id: string; label: string }[]>();
-  for (const posting of postings) {
+  for (const posting of stripped) {
     // A newline between them: the title is its own segment, so no phrase is
     // invented by running the last word of one into the first of the other.
     for (const term of termsIn(`${posting.label}\n${posting.text}`)) {
@@ -284,5 +405,6 @@ export function findVocabularyGaps(
     postingsExamined: postings.length,
     termsConsidered: frequent.length,
     minPostings,
+    boilerplateSegmentsRemoved: removedSegments,
   };
 }

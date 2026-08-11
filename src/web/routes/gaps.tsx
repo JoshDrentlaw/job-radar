@@ -139,12 +139,18 @@ const GapsPage: FC<{
             hint={`Distinct terms used by at least ${props.minPostings} of them`}
           />
           <Metric label="gaps found" value={props.report.gaps.length} />
+          <Metric
+            label="boilerplate segments excluded"
+            value={props.report.boilerplateSegmentsRemoved}
+            hint="Paragraphs and sentences a board pastes into most of its own postings verbatim — legal disclaimers, EEO statements, benefits blurbs"
+          />
         </div>
         <p class="panel-note gap-above">
           A term in one posting is that posting's vocabulary, not the market's, so nothing below
           appears in fewer than {props.minPostings}{" "}
           of them. Terms already present in both your profile and your fact set are not shown at
-          all. Ordinary English and job-posting boilerplate are filtered out.
+          all. Ordinary English, job-posting boilerplate, and text repeated near-verbatim across
+          most of a board's own postings are filtered out.
         </p>
       </section>
 
@@ -207,7 +213,12 @@ gapRoutes.get("/gaps", async (c) => {
   const { postings } = await services.postings.list({ limit: 5_000 });
   const documents: TermDocument[] = postings
     .filter((posting) => scope === "listed" || matched.has(posting.id))
-    .map((posting) => ({ id: posting.id, label: posting.title, text: posting.descriptionText }));
+    .map((posting) => ({
+      id: posting.id,
+      label: posting.title,
+      text: posting.descriptionText,
+      groupId: posting.boardId,
+    }));
 
   // Only active facets: a retired one is not what the matcher sees.
   const profileText = facets
