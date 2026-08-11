@@ -104,6 +104,24 @@ const STOPWORDS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * A hex string long enough and containing at least one digit is a hash or
+ * database id, not a word: English mixes letters and digits (`c++`, `s3`,
+ * `web3`) but never restricts itself to `0-9a-f` while doing it, so this
+ * rule has no real-word false positives to guard against. The length floor
+ * keeps short legitimate hex-only words (`cab`, `dead`, `face`) out of reach.
+ * A dashed UUID (`8-4-4-4-12` hex groups) is caught separately since the
+ * dashes break the contiguous-hex check.
+ */
+const HEX_ID = /^[0-9a-f]+$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MIN_HEX_ID_LENGTH = 12;
+
+function looksLikeId(token: string): boolean {
+  if (UUID.test(token)) return true;
+  return token.length >= MIN_HEX_ID_LENGTH && HEX_ID.test(token) && /\d/.test(token);
+}
+
+/**
  * Tokens keep the punctuation that is part of a name — `c++`, `c#`, `node.js`,
  * `.net`, `ci/cd` — and lose the punctuation that is grammar. Getting this
  * wrong is how a vocabulary report ends up recommending "c" and "js".
@@ -116,7 +134,10 @@ export function tokenize(text: string): string[] {
     .map((token) => token.replace(/^[^\p{L}\p{N}.]+/u, "").replace(/[.,\-/]+$/u, ""))
     .filter((token) => token.length >= 2 && token.length <= 40)
     // A bare number is never a skill.
-    .filter((token) => !/^[\d.]+$/.test(token));
+    .filter((token) => !/^[\d.]+$/.test(token))
+    // Nor is a tracking id, a commit hash or a UUID that leaked into a
+    // posting's text — it names a record, not a skill.
+    .filter((token) => !looksLikeId(token));
 }
 
 function isContentWord(token: string): boolean {
