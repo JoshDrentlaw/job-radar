@@ -34,6 +34,35 @@ Deno.test("tokenize drops grammar punctuation, bare numbers and single letters",
   assert(!tokens.some((token) => /^[\d.]+$/.test(token)), "a bare number is never a skill");
 });
 
+Deno.test("tokenize drops hash-like ids but keeps real hex-lookalike words and short codes", () => {
+  const tokens = tokenize(
+    "Requisition id 24d528fddbfc930044f9ff621f961987 for a cafe with a dead deadbeef vibe. " +
+      "Session 123e4567-e89b-12d3-a456-426614174000 opened. We use s3 and web3 and c++.",
+  );
+  assert(!tokens.includes("24d528fddbfc930044f9ff621f961987"), tokens.join(","));
+  assert(!tokens.includes("123e4567-e89b-12d3-a456-426614174000"), tokens.join(","));
+  assert(tokens.includes("cafe"));
+  assert(tokens.includes("dead"));
+  assert(tokens.includes("deadbeef"), "no digit, so not id-shaped");
+  assert(tokens.includes("s3"));
+  assert(tokens.includes("web3"));
+  assert(tokens.includes("c++"));
+});
+
+Deno.test("a hash that leaked into many postings is not a vocabulary gap", () => {
+  const postings = [
+    posting("1", "Electrician", "Requisition id 24d528fddbfc930044f9ff621f961987 apply now."),
+    posting("2", "Propulsion Engineer", "Requisition id 24d528fddbfc930044f9ff621f961987 apply."),
+    posting("3", "Principal Mechanical Engineer", "id 24d528fddbfc930044f9ff621f961987 apply."),
+  ];
+  const terms = findVocabularyGaps(postings, "", "", { minPostings: 3 }).gaps.map((g) => g.term);
+  assertEquals(
+    terms.some((term) => term.includes("24d528fddbfc930044f9ff621f961987")),
+    false,
+    "a leaked hash is not something to write about",
+  );
+});
+
 Deno.test("terms include adjacent pairs, but only between content words", () => {
   const terms = termsIn("Run incident response for the platform");
   assert(terms.has("incident response"), "a phrase is not two words");
