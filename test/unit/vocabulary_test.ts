@@ -63,6 +63,16 @@ Deno.test("a hash that leaked into many postings is not a vocabulary gap", () =>
   );
 });
 
+Deno.test("a link's url scheme is rendering noise, not a vocabulary gap", () => {
+  const postings = [
+    posting("1", "Electrician", "Apply at [our site](https://boards.example.com/1)."),
+    posting("2", "Propulsion Engineer", "See [details](https://boards.example.com/2) here."),
+    posting("3", "Mechanical Engineer", "Visit https://boards.example.com/3 to apply."),
+  ];
+  const terms = findVocabularyGaps(postings, "", "", { minPostings: 3 }).gaps.map((g) => g.term);
+  assertEquals(terms.includes("https"), false, "a url scheme is not something to write about");
+});
+
 Deno.test("terms include adjacent pairs, but only between content words", () => {
   const terms = termsIn("Run incident response for the platform");
   assert(terms.has("incident response"), "a phrase is not two words");

@@ -161,22 +161,42 @@ const WritingPrompt: FC<{
       <h2>Something to write about</h2>
     </header>
     {fact !== undefined && (
-      <p>
-        You wrote about this, but no facet covers it yet: <em>"{fact.label}"</em>
-      </p>
+      <div class="stack">
+        <p>
+          You wrote about this, but no facet covers it yet: <em>"{fact.label}"</em>
+        </p>
+        <div class="row">
+          <a
+            class="button quiet"
+            href={`/profile?prefillContent=${encodeURIComponent(fact.label)}#new-content`}
+          >
+            Start a facet from this
+          </a>
+        </div>
+      </div>
     )}
     {term !== undefined && (
-      <p>
-        <strong>{term.term}</strong> shows up in {term.postingCount} posting
-        {term.postingCount === 1 ? "" : "s"} you're not addressing —{" "}
-        {term.examples.map((example, index) => (
-          <span key={example.id}>
-            {index > 0 ? ", " : ""}
-            <a href={`/matches/${encodeURIComponent(example.id)}`}>{example.label}</a>
-          </span>
-        ))}
-        . Have you done that?
-      </p>
+      <div class="stack">
+        <p>
+          <strong>{term.term}</strong> shows up in {term.postingCount} posting
+          {term.postingCount === 1 ? "" : "s"} you're not addressing —{" "}
+          {term.examples.map((example, index) => (
+            <span key={example.id}>
+              {index > 0 ? ", " : ""}
+              <a href={`/matches/${encodeURIComponent(example.id)}`}>{example.label}</a>
+            </span>
+          ))}
+          . Have you done that?
+        </p>
+        <div class="row">
+          <a
+            class="button quiet"
+            href={`/profile?prefillName=${encodeURIComponent(term.term)}#new-name`}
+          >
+            Start a facet named "{term.term}"
+          </a>
+        </div>
+      </div>
     )}
     <p class="field-hint">
       Both are picked by word overlap, not meaning — treat them as a starting point, not a verdict.
@@ -197,6 +217,8 @@ const ProfilePage: FC<{
   csrfToken: string;
   error?: string;
   notice?: string;
+  prefillName?: string;
+  prefillContent?: string;
 }> = (props) => (
   <Layout title="Profile" current="profile" csrfToken={props.csrfToken}>
     <Tabs
@@ -237,7 +259,11 @@ const ProfilePage: FC<{
       further off the screen.
     */
     }
-    <details class="panel disclosure" open={props.facets.length === 0}>
+    <details
+      class="panel disclosure"
+      open={props.facets.length === 0 || props.prefillName !== undefined ||
+        props.prefillContent !== undefined}
+    >
       <summary>Add a facet</summary>
       <p class="panel-note">
         A facet is one angle on the same experience, not a category of job. Two facets that would
@@ -254,6 +280,7 @@ const ProfilePage: FC<{
               required
               maxlength={80}
               placeholder="backend"
+              value={props.prefillName ?? ""}
             />
           </Field>
         </div>
@@ -271,6 +298,7 @@ const ProfilePage: FC<{
             required
             placeholder="What you have built, operated, debugged — specifics beat titles."
           >
+            {props.prefillContent ?? ""}
           </textarea>
         </Field>
         <div class="row">
@@ -395,6 +423,8 @@ profileRoutes.get("/profile", async (c) => {
 
   const error = c.req.query("error");
   const notice = c.req.query("notice");
+  const prefillName = c.req.query("prefillName");
+  const prefillContent = c.req.query("prefillContent");
   return c.html(
     <ProfilePage
       facets={facets}
@@ -406,6 +436,8 @@ profileRoutes.get("/profile", async (c) => {
       csrfToken={c.get("csrfToken")}
       {...(error !== undefined ? { error } : {})}
       {...(notice !== undefined ? { notice } : {})}
+      {...(prefillName !== undefined ? { prefillName } : {})}
+      {...(prefillContent !== undefined ? { prefillContent } : {})}
     />,
   );
 });

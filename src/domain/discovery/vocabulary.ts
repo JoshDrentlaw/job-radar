@@ -100,6 +100,11 @@ const STOPWORDS: ReadonlySet<string> = new Set(
     requirements responsible role salary senior skills someone strong team teams us use using
     want work working world year years you'll your
     `.split(/\s+/).filter((word) => word !== ""),
+  ).concat(
+    // A markdown link's target splits on ":" into "https" and the rest of the
+    // URL (§ htmlToMarkdown renders `<a>` as `[text](url)`). Almost every
+    // posting links somewhere, so this is rendering noise, not vocabulary.
+    ["https", "http", "www"],
   ),
 );
 
