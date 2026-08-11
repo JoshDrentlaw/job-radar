@@ -9,13 +9,22 @@
 import { Hono } from "hono";
 import type { FC } from "hono/jsx";
 import { Layout } from "@web/layout.tsx";
-import { CheckboxField, CsrfField, Field, formatDateTime, Notice, Tabs } from "@web/components.tsx";
+import {
+  CheckboxField,
+  CsrfField,
+  Field,
+  formatDateTime,
+  Metric,
+  Notice,
+  Tabs,
+} from "@web/components.tsx";
 import { Markdown } from "@web/markdown.tsx";
 import type { AppEnv } from "@web/types.ts";
 import type { Services } from "@web/services.ts";
 import { asFacetId, type FacetId } from "@platform/ids.ts";
 import type { PostingId } from "@platform/ids.ts";
 import type { ProfileFacet } from "@domain/discovery/matching.ts";
+import { chunkText, DEFAULT_CHUNK_OPTIONS } from "@domain/discovery/chunk.ts";
 import {
   DEFAULT_VOCABULARY_OPTIONS,
   findUncoveredDocuments,
@@ -128,6 +137,14 @@ const FacetCard: FC<{
           </Field>
           <div class="row">
             <button type="submit" class="primary">Save facet</button>
+            <button
+              type="submit"
+              class="quiet"
+              formaction="/profile/facets/preview-chunks"
+              formtarget="chunk-preview"
+            >
+              Preview chunking
+            </button>
           </div>
         </form>
         <form
@@ -303,6 +320,14 @@ const ProfilePage: FC<{
         </Field>
         <div class="row">
           <button type="submit" class="primary">Create facet</button>
+          <button
+            type="submit"
+            class="quiet"
+            formaction="/profile/facets/preview-chunks"
+            formtarget="chunk-preview"
+          >
+            Preview chunking
+          </button>
         </div>
       </form>
     </details>
@@ -344,6 +369,69 @@ const ProfilePage: FC<{
       )}
   </Layout>
 );
+
+/**
+ * A cheap, read-only look at how a facet's text will actually split for
+ * embedding (§7) — no embedding call, no save, just `chunkText` run against
+ * whatever was in the textarea when the button was pressed. Opens in a named
+ * window (`formtarget` on the button, no JS involved) rather than navigating
+ * away, so the in-progress edit in the original tab is never disturbed;
+ * pressing "Preview chunking" again reuses that same window with the latest
+ * text.
+ */
+const ChunkPreviewPage: FC<{ name: string; content: string; csrfToken: string }> = (props) => {
+  const chunks = chunkText(props.content, DEFAULT_CHUNK_OPTIONS);
+  return (
+    <Layout title="Chunk preview" current="profile" csrfToken={props.csrfToken}>
+      <div class="page-head">
+        <div>
+          <h1>Chunk preview</h1>
+          <p class="lede">
+            {props.name !== ""
+              ? `How "${props.name}" will split for embedding`
+              : "How this text will split for embedding"}{" "}
+            — each box below is one chunk, matched against postings independently. Nothing here is
+            saved; edit the textarea and press "Preview chunking" again to refresh this window.
+          </p>
+        </div>
+      </div>
+
+      {props.content.trim() === ""
+        ? <p class="empty">Nothing to preview — the text was empty.</p>
+        : (
+          <>
+            <section class="panel">
+              <div class="metrics">
+                <Metric label="chunks" value={chunks.length} />
+                <Metric label="characters" value={props.content.length} />
+                <Metric
+                  label="target / max chars"
+                  value={`${DEFAULT_CHUNK_OPTIONS.targetChars} / ${DEFAULT_CHUNK_OPTIONS.maxChars}`}
+                  hint="A chunk closes once it reaches the target. A single markdown block bigger than the max is hard-split, even mid-block."
+                />
+              </div>
+              <p class="panel-note gap-above">
+                Consecutive chunks overlap by one paragraph on purpose — the shared paragraph is
+                what keeps a requirement straddling a boundary fully inside at least one chunk.
+              </p>
+            </section>
+
+            {chunks.map((chunk, i) => (
+              <section class="panel stack" key={chunk.seq}>
+                <header>
+                  <h2>
+                    Chunk {i + 1} of {chunks.length}
+                  </h2>
+                  <span class="chip">{chunk.text.length} chars</span>
+                </header>
+                <pre class="chunk-preview-text">{chunk.text}</pre>
+              </section>
+            ))}
+          </>
+        )}
+    </Layout>
+  );
+};
 
 function formValues(body: Record<string, unknown>): {
   name: string;
@@ -445,6 +533,15 @@ profileRoutes.get("/profile", async (c) => {
       {...(prefillContent !== undefined ? { prefillContent } : {})}
     />,
   );
+});
+
+// Not a facet mutation — reads whatever is currently in the textarea and
+// shows how it would chunk. Nothing is persisted or embedded.
+profileRoutes.post("/profile/facets/preview-chunks", async (c) => {
+  const body = await c.req.parseBody();
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const content = typeof body.content === "string" ? body.content : "";
+  return c.html(<ChunkPreviewPage name={name} content={content} csrfToken={c.get("csrfToken")} />);
 });
 
 profileRoutes.post("/profile/facets", async (c) => {
