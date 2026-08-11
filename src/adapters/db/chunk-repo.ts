@@ -23,11 +23,16 @@ export class PostgresChunkRepo implements ChunkRepo {
   }
 
   /**
-   * Listed postings whose current content has no vectors under this model.
-   * Oldest first, so a bounded drain works through the backlog in stable order
-   * instead of revisiting whatever happens to sort first.
+   * Listed postings whose current content has no vectors under this model
+   * and chunker version. Oldest first, so a bounded drain works through the
+   * backlog in stable order instead of revisiting whatever happens to sort
+   * first.
    */
-  async stalePostings(model: string, limit: number): Promise<StalePosting[]> {
+  async stalePostings(
+    model: string,
+    chunkerVersion: string,
+    limit: number,
+  ): Promise<StalePosting[]> {
     const rows = await this.#sql<
       { id: string; title: string; description_text: string; provenance_content_hash: string }[]
     >`
@@ -38,6 +43,7 @@ export class PostgresChunkRepo implements ChunkRepo {
           SELECT 1 FROM discovery.posting_chunks c
           WHERE c.posting_id = p.id
             AND c.model = ${model}
+            AND c.chunker_version = ${chunkerVersion}
             AND c.content_hash = p.provenance_content_hash
         )
       ORDER BY p.first_seen_at, p.id
@@ -51,7 +57,7 @@ export class PostgresChunkRepo implements ChunkRepo {
     }));
   }
 
-  async stalePostingCount(model: string): Promise<number> {
+  async stalePostingCount(model: string, chunkerVersion: string): Promise<number> {
     const rows = await this.#sql<{ count: string }[]>`
       SELECT count(*)::text AS count
       FROM discovery.postings p
@@ -60,6 +66,7 @@ export class PostgresChunkRepo implements ChunkRepo {
           SELECT 1 FROM discovery.posting_chunks c
           WHERE c.posting_id = p.id
             AND c.model = ${model}
+            AND c.chunker_version = ${chunkerVersion}
             AND c.content_hash = p.provenance_content_hash
         )
     `;
@@ -75,6 +82,7 @@ export class PostgresChunkRepo implements ChunkRepo {
   async replacePostingChunks(
     postingId: PostingId,
     model: string,
+    chunkerVersion: string,
     contentHash: string,
     chunks: readonly EmbeddedChunk[],
     at: Date,
@@ -84,10 +92,11 @@ export class PostgresChunkRepo implements ChunkRepo {
       for (const chunk of chunks) {
         await tx`
           INSERT INTO discovery.posting_chunks
-            (posting_id, seq, text, embedding, model, content_hash, embedded_at)
+            (posting_id, seq, text, embedding, model, chunker_version, content_hash, embedded_at)
           VALUES
             (${postingId}, ${chunk.seq}, ${chunk.text},
-             ${vectorLiteral(chunk.embedding)}::vector, ${model}, ${contentHash}, ${at})
+             ${vectorLiteral(chunk.embedding)}::vector, ${model}, ${chunkerVersion},
+             ${contentHash}, ${at})
         `;
       }
     });
@@ -96,6 +105,7 @@ export class PostgresChunkRepo implements ChunkRepo {
   async replaceFacetChunks(
     facetId: FacetId,
     model: string,
+    chunkerVersion: string,
     contentHash: string,
     chunks: readonly EmbeddedChunk[],
     at: Date,
@@ -105,10 +115,11 @@ export class PostgresChunkRepo implements ChunkRepo {
       for (const chunk of chunks) {
         await tx`
           INSERT INTO discovery.facet_chunks
-            (facet_id, seq, text, embedding, model, content_hash, embedded_at)
+            (facet_id, seq, text, embedding, model, chunker_version, content_hash, embedded_at)
           VALUES
             (${facetId}, ${chunk.seq}, ${chunk.text},
-             ${vectorLiteral(chunk.embedding)}::vector, ${model}, ${contentHash}, ${at})
+             ${vectorLiteral(chunk.embedding)}::vector, ${model}, ${chunkerVersion},
+             ${contentHash}, ${at})
         `;
       }
     });

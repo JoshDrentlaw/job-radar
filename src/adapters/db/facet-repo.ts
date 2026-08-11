@@ -75,14 +75,17 @@ export class PostgresFacetRepo implements FacetRepo {
     await this.#sql`DELETE FROM discovery.profile_facets WHERE id = ${id}`;
   }
 
-  async staleForModel(model: string): Promise<ProfileFacet[]> {
+  async staleForModel(model: string, chunkerVersion: string): Promise<ProfileFacet[]> {
     const rows = await this.#sql<FacetRow[]>`
       SELECT ${this.#sql.unsafe(COLUMNS)}
       FROM discovery.profile_facets f
       WHERE f.active
         AND NOT EXISTS (
           SELECT 1 FROM discovery.facet_chunks c
-          WHERE c.facet_id = f.id AND c.model = ${model} AND c.content_hash = f.content_hash
+          WHERE c.facet_id = f.id
+            AND c.model = ${model}
+            AND c.chunker_version = ${chunkerVersion}
+            AND c.content_hash = f.content_hash
         )
       ORDER BY f.name
     `;

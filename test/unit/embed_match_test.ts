@@ -50,6 +50,7 @@ function cosine(a: readonly number[], b: readonly number[]): number {
 
 interface StoredChunk extends EmbeddedChunk {
   readonly model: string;
+  readonly chunkerVersion: string;
   readonly contentHash: string;
   bestScore: number | null;
 }
@@ -72,11 +73,14 @@ class Store {
 class FakeFacetRepo implements Pick<FacetRepo, "staleForModel"> {
   constructor(readonly store: Store) {}
 
-  staleForModel(model: string): Promise<ProfileFacet[]> {
+  staleForModel(model: string, chunkerVersion: string): Promise<ProfileFacet[]> {
     const stale = [...this.store.facets.values()].filter((facet) => {
       if (!facet.active) return false;
       const chunks = this.store.facetChunks.get(facet.id) ?? [];
-      return !chunks.some((c) => c.model === model && c.contentHash === facet.contentHash);
+      return !chunks.some((c) =>
+        c.model === model && c.chunkerVersion === chunkerVersion &&
+        c.contentHash === facet.contentHash
+      );
     });
     return Promise.resolve(stale);
   }
@@ -85,37 +89,41 @@ class FakeFacetRepo implements Pick<FacetRepo, "staleForModel"> {
 class FakeChunkRepo implements ChunkRepo {
   constructor(readonly store: Store) {}
 
-  #stale(model: string): PostingId[] {
+  #stale(model: string, chunkerVersion: string): PostingId[] {
     return [...this.store.postings.entries()]
       .filter(([id, posting]) => {
         const chunks = this.store.postingChunks.get(id) ?? [];
-        return !chunks.some((c) => c.model === model && c.contentHash === posting.contentHash);
+        return !chunks.some((c) =>
+          c.model === model && c.chunkerVersion === chunkerVersion &&
+          c.contentHash === posting.contentHash
+        );
       })
       .map(([id]) => id);
   }
 
-  stalePostings(model: string, limit: number): Promise<StalePosting[]> {
+  stalePostings(model: string, chunkerVersion: string, limit: number): Promise<StalePosting[]> {
     return Promise.resolve(
-      this.#stale(model).slice(0, limit).map((id) => {
+      this.#stale(model, chunkerVersion).slice(0, limit).map((id) => {
         const p = this.store.postings.get(id)!;
         return { id, title: p.title, descriptionText: p.description, contentHash: p.contentHash };
       }),
     );
   }
 
-  stalePostingCount(model: string): Promise<number> {
-    return Promise.resolve(this.#stale(model).length);
+  stalePostingCount(model: string, chunkerVersion: string): Promise<number> {
+    return Promise.resolve(this.#stale(model, chunkerVersion).length);
   }
 
   replacePostingChunks(
     postingId: PostingId,
     model: string,
+    chunkerVersion: string,
     contentHash: string,
     chunks: readonly EmbeddedChunk[],
   ): Promise<void> {
     this.store.postingChunks.set(
       postingId,
-      chunks.map((c) => ({ ...c, model, contentHash, bestScore: null })),
+      chunks.map((c) => ({ ...c, model, chunkerVersion, contentHash, bestScore: null })),
     );
     return Promise.resolve();
   }
@@ -123,12 +131,13 @@ class FakeChunkRepo implements ChunkRepo {
   replaceFacetChunks(
     facetId: FacetId,
     model: string,
+    chunkerVersion: string,
     contentHash: string,
     chunks: readonly EmbeddedChunk[],
   ): Promise<void> {
     this.store.facetChunks.set(
       facetId,
-      chunks.map((c) => ({ ...c, model, contentHash, bestScore: null })),
+      chunks.map((c) => ({ ...c, model, chunkerVersion, contentHash, bestScore: null })),
     );
     return Promise.resolve();
   }
@@ -277,6 +286,34 @@ Deno.test("embed: embeds stale facets and postings, then goes quiet", async () =
   assertEquals(second.facetsEmbedded, 0);
   assertEquals(second.postingsEmbedded, 0);
   assertEquals(second.chunksEmbedded, 0);
+});
+
+Deno.test("embed: a facet chunked under an older chunker version re-embeds even though its content did not change", async () => {
+  const store = new Store();
+  const embedder = new FakeEmbedder();
+  await facet(store, "f1", "backend", "typescript deno postgres services");
+  posting(store, "p:a:1", "Backend Engineer", "typescript deno postgres apis");
+
+  // Simulate a facet already embedded before the chunker fix: fresh model
+  // and content hash, but recorded at chunker version "1". CHUNKER_VERSION
+  // (imported by embed.ts, not injected here) is "2".
+  const oldFacet = store.facets.get("f1" as FacetId)!;
+  store.facetChunks.set("f1" as FacetId, [{
+    seq: 0,
+    text: oldFacet.content,
+    embedding: [1],
+    model: embedder.model,
+    chunkerVersion: "1",
+    contentHash: oldFacet.contentHash,
+    bestScore: null,
+  }]);
+
+  const h = harness(store, embedder);
+  const report = await h.embed();
+  assertEquals(report.facetsEmbedded, 1, "the version mismatch alone should mark it stale");
+
+  const stored = store.facetChunks.get("f1" as FacetId)!;
+  assert(stored.every((c) => c.chunkerVersion !== "1"), "re-embedding writes the current version");
 });
 
 Deno.test("embed: a changed posting hash re-embeds only that posting", async () => {

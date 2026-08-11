@@ -66,3 +66,78 @@ Deno.test("chunk: defaults handle a realistic posting in a few chunks", () => {
   const chunks = chunkText(text, DEFAULT_CHUNK_OPTIONS);
   assert(chunks.length >= 3 && chunks.length <= 8, `unexpected chunk count ${chunks.length}`);
 });
+
+/* --------------------------------------- markdown-block grouping --------- */
+
+Deno.test("chunk: a heading is never separated from the body that follows it", () => {
+  const text =
+    `${paragraph("intro", 200)}\n\n# Commission\n\n${paragraph("commission body", 200)}\n\n` +
+    `# Accounting\n\n${paragraph("accounting body", 200)}`;
+  const chunks = chunkText(text, OPTIONS);
+  for (const chunk of chunks) {
+    // Every heading line in a chunk must have more than itself in that chunk.
+    const lines = chunk.text.split("\n");
+    lines.forEach((line, i) => {
+      if (/^#{1,6}\s/.test(line)) {
+        assert(
+          lines.slice(i + 1).some((l) => l.trim() !== ""),
+          `heading "${line}" has nothing after it in its own chunk`,
+        );
+      }
+    });
+  }
+});
+
+Deno.test("chunk: a chain of headings glues through to the real content", () => {
+  const chunks = chunkText(
+    "# Section\n\n## Subsection\n\nBody text finally arrives here.",
+    OPTIONS,
+  );
+  assertEquals(chunks.length, 1);
+  assert(chunks[0]!.text.includes("Body text finally arrives here."));
+});
+
+Deno.test("chunk: a loose list (blank line between items) never loses an item to a chunk boundary", () => {
+  // Small enough that the whole glued list stays under maxChars — a list
+  // too big to fit is the same, separate "oversized unit" case a fence too
+  // big to fit is (see the fence test above), not what this test is about.
+  const items = Array.from({ length: 6 }, (_, i) => `- ${paragraph(`item${i}`, 20)}`);
+  const text = `Services I built:\n\n${items.join("\n\n")}`;
+  const chunks = chunkText(text, OPTIONS);
+  // The whole list is one unit now, so it lands in exactly one chunk.
+  const withList = chunks.filter((c) => items.some((item) => c.text.includes(item)));
+  assertEquals(withList.length, 1, "the list should not be split across chunks");
+  for (const item of items) {
+    assert(withList[0]!.text.includes(item), `missing list item: ${item.slice(0, 20)}`);
+  }
+});
+
+Deno.test("chunk: a tight list (no blank lines) is unaffected — it was already one unit", () => {
+  const text =
+    "Services I built:\n\n- Payroll export\n- Commission calculator\n- Time sheet generator";
+  const chunks = chunkText(text, DEFAULT_CHUNK_OPTIONS);
+  assertEquals(chunks.length, 1);
+  assertEquals(chunks[0]!.text, text);
+});
+
+Deno.test("chunk: a blank line inside a fenced code block is not a chunk boundary", () => {
+  const text =
+    "Here is the core loop:\n\n```php\nfunction total($rows) {\n\n    return array_sum($rows);\n}\n```\n\nThat's the gist.";
+  const chunks = chunkText(text, DEFAULT_CHUNK_OPTIONS);
+  assertEquals(
+    chunks.length,
+    1,
+    "well under maxChars, so the fence should stay whole in one chunk",
+  );
+  assertEquals(chunks[0]!.text, text);
+});
+
+Deno.test("chunk: a fence bigger than maxChars can still be hard-cut — a known, documented gap", () => {
+  const body = paragraph("fenceline", 2_000).replaceAll(" ", "\n");
+  const text = `\`\`\`\n${body}\n\`\`\``;
+  const chunks = chunkText(text, OPTIONS);
+  assert(
+    chunks.length > 1,
+    "an oversized fence still gets split — grouping only protects it up to maxChars",
+  );
+});
