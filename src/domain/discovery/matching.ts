@@ -92,8 +92,12 @@ export interface FacetRepo {
   get(id: FacetId): Promise<ProfileFacet | null>;
   upsert(input: FacetInput): Promise<ProfileFacet>;
   remove(id: FacetId): Promise<void>;
-  /** Active facets with no fresh chunk vectors for this model. */
-  staleForModel(model: string): Promise<ProfileFacet[]>;
+  /**
+   * Active facets with no fresh chunk vectors for this model and chunker
+   * version. A row chunked under an older chunkerVersion is stale even when
+   * its content hasn't changed — the splitter that produced it has (§7).
+   */
+  staleForModel(model: string, chunkerVersion: string): Promise<ProfileFacet[]>;
 }
 
 export interface StalePosting {
@@ -110,13 +114,19 @@ export interface EmbeddedChunk {
 }
 
 export interface ChunkRepo {
-  /** Listed postings with no fresh chunk vectors for this model, oldest first. */
-  stalePostings(model: string, limit: number): Promise<StalePosting[]>;
+  /**
+   * Listed postings with no fresh chunk vectors for this model and chunker
+   * version, oldest first. A row chunked under an older chunkerVersion is
+   * stale even when its content hasn't changed — the splitter that
+   * produced it has (§7).
+   */
+  stalePostings(model: string, chunkerVersion: string, limit: number): Promise<StalePosting[]>;
   /** How many postings stalePostings would still return. */
-  stalePostingCount(model: string): Promise<number>;
+  stalePostingCount(model: string, chunkerVersion: string): Promise<number>;
   replacePostingChunks(
     postingId: PostingId,
     model: string,
+    chunkerVersion: string,
     contentHash: string,
     chunks: readonly EmbeddedChunk[],
     at: Date,
@@ -124,6 +134,7 @@ export interface ChunkRepo {
   replaceFacetChunks(
     facetId: FacetId,
     model: string,
+    chunkerVersion: string,
     contentHash: string,
     chunks: readonly EmbeddedChunk[],
     at: Date,

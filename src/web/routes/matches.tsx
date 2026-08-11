@@ -33,6 +33,7 @@ import {
   type PostingChunkScore,
   type ProfileFacet,
 } from "@domain/discovery/matching.ts";
+import { CHUNKER_VERSION } from "@domain/discovery/chunk.ts";
 import { embedPending } from "@domain/discovery/embed.ts";
 import { scorePending } from "@domain/discovery/match.ts";
 import type { Posting } from "@domain/discovery/types.ts";
@@ -373,7 +374,9 @@ matchRoutes.get("/matches", async (c) => {
     services.matches.listCandidates(facetFilter !== undefined ? { facetId: facetFilter } : {}),
     loadBucketThresholds(services.settings),
     services.facets.list(),
-    model !== undefined ? services.chunks.stalePostingCount(model) : Promise.resolve(0),
+    model !== undefined
+      ? services.chunks.stalePostingCount(model, CHUNKER_VERSION)
+      : Promise.resolve(0),
   ]);
 
   const notice = c.req.query("notice");

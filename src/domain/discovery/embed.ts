@@ -3,13 +3,17 @@
  *
  * Embedding is the only expensive operation, so it is gated hard: a posting is
  * embedded only when no vectors exist for its current content hash under the
- * current model, and likewise for facets. Everything already embedded is not
- * touched — running this twice in a row does nothing the second time.
+ * current model and chunker version, and likewise for facets. Everything
+ * already embedded is not touched — running this twice in a row does nothing
+ * the second time. Chunker version is what makes a chunkText() fix reach
+ * already-embedded content: bump CHUNKER_VERSION and every existing row,
+ * unchanged text and all, looks stale against the new version and re-embeds
+ * on the next run.
  */
 
 import type { Clock } from "@platform/clock.ts";
 import type { Logger } from "@platform/logger.ts";
-import { chunkText } from "./chunk.ts";
+import { CHUNKER_VERSION, chunkText } from "./chunk.ts";
 import type { ChunkRepo, EmbeddedChunk, Embedder, FacetRepo } from "./matching.ts";
 
 export interface EmbedDeps {
@@ -45,7 +49,7 @@ export async function embedPending(
 
   // Facets first: they are few, and fresh facet vectors are what posting
   // scores are computed against.
-  const staleFacets = await deps.facets.staleForModel(model);
+  const staleFacets = await deps.facets.staleForModel(model, CHUNKER_VERSION);
   for (const facet of staleFacets) {
     const chunks = chunkText(facet.content);
     if (chunks.length === 0) {
@@ -61,6 +65,7 @@ export async function embedPending(
     await deps.chunks.replaceFacetChunks(
       facet.id,
       model,
+      CHUNKER_VERSION,
       facet.contentHash,
       embedded,
       deps.clock.now(),
@@ -70,7 +75,7 @@ export async function embedPending(
   }
 
   const limit = opts.postingLimit ?? DEFAULT_POSTING_LIMIT;
-  const stalePostings = await deps.chunks.stalePostings(model, limit);
+  const stalePostings = await deps.chunks.stalePostings(model, CHUNKER_VERSION, limit);
   let postingsEmbedded = 0;
 
   for (const posting of stalePostings) {
@@ -92,6 +97,7 @@ export async function embedPending(
     await deps.chunks.replacePostingChunks(
       posting.id,
       model,
+      CHUNKER_VERSION,
       posting.contentHash,
       embedded,
       deps.clock.now(),
@@ -100,13 +106,13 @@ export async function embedPending(
     postingsEmbedded += 1;
   }
 
-  const postingsRemaining = await deps.chunks.stalePostingCount(model);
+  const postingsRemaining = await deps.chunks.stalePostingCount(model, CHUNKER_VERSION);
   const report: EmbedReport = {
     facetsEmbedded: staleFacets.length,
     postingsEmbedded,
     chunksEmbedded,
     postingsRemaining,
   };
-  logger.info("embed drain finished", { ...report, model });
+  logger.info("embed drain finished", { ...report, model, chunkerVersion: CHUNKER_VERSION });
   return report;
 }

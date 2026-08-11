@@ -24,7 +24,7 @@ import type { Services } from "@web/services.ts";
 import { asFacetId, type FacetId } from "@platform/ids.ts";
 import type { PostingId } from "@platform/ids.ts";
 import type { ProfileFacet } from "@domain/discovery/matching.ts";
-import { chunkText, DEFAULT_CHUNK_OPTIONS } from "@domain/discovery/chunk.ts";
+import { CHUNKER_VERSION, chunkText, DEFAULT_CHUNK_OPTIONS } from "@domain/discovery/chunk.ts";
 import {
   DEFAULT_VOCABULARY_OPTIONS,
   findUncoveredDocuments,
@@ -510,7 +510,9 @@ profileRoutes.get("/profile", async (c) => {
     model !== undefined
       ? services.chunks.facetEmbedStatus(model)
       : Promise.resolve(new Map<FacetId, FacetStatus>()),
-    model !== undefined ? services.facets.staleForModel(model) : Promise.resolve([]),
+    model !== undefined
+      ? services.facets.staleForModel(model, CHUNKER_VERSION)
+      : Promise.resolve([]),
     pickWritingPrompts(services),
   ]);
 
