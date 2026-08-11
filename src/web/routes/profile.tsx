@@ -395,7 +395,12 @@ async function pickWritingPrompts(
   const scope = matched.size > 0 ? "matched" : "listed";
   const postingDocuments: TermDocument[] = postings
     .filter((posting) => scope === "listed" || matched.has(posting.id))
-    .map((posting) => ({ id: posting.id, label: posting.title, text: posting.descriptionText }));
+    .map((posting) => ({
+      id: posting.id,
+      label: posting.title,
+      text: posting.descriptionText,
+      groupId: posting.boardId,
+    }));
   const dossierText = activeFacts
     .map((f) => `${f.text}\n${f.organization ?? ""}\n${f.tags.join("\n")}`)
     .join("\n");

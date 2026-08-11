@@ -3,6 +3,7 @@ import {
   findUncoveredDocuments,
   findVocabularyGaps,
   gapKind,
+  stripBoilerplate,
   type TermDocument,
   termsIn,
   tokenize,
@@ -14,6 +15,10 @@ function posting(id: string, label: string, text: string): TermDocument {
 
 function fact(id: string, text: string): TermDocument {
   return { id, label: text, text };
+}
+
+function boardPosting(id: string, label: string, text: string, groupId: string): TermDocument {
+  return { id, label, text, groupId };
 }
 
 Deno.test("tokenize keeps the punctuation that is part of a name", () => {
@@ -225,6 +230,147 @@ Deno.test("nothing to examine produces an empty report rather than an error", ()
   const report = findVocabularyGaps([], "profile text", "dossier text");
   assertEquals(report.gaps, []);
   assertEquals(report.postingsExamined, 0);
+});
+
+/* -------------------------------------------- boilerplate stripping ------- */
+
+const LEGAL_PARAGRAPH =
+  "This company is an Equal Opportunity Employer and does not discriminate on the basis of " +
+  "race, color, religion, sex, national origin, disability or veteran status.";
+
+// Distinct words, not numbers, per posting — normalization folds digit runs
+// together on purpose (§ a spliced-in number test below), so a "unique"
+// sentence that varies only by a trailing digit would collapse into a
+// second, accidental template instead of testing real variation.
+const CITIES = [
+  "Chicago",
+  "Boston",
+  "Denver",
+  "Austin",
+  "Seattle",
+  "Miami",
+  "Reno",
+  "Tulsa",
+  "Boise",
+  "Fargo",
+  "Provo",
+  "Selma",
+];
+
+function boardOf(size: number, uniqueSentence: (city: string) => string): TermDocument[] {
+  return Array.from(
+    { length: size },
+    (_, i) =>
+      boardPosting(
+        `p${i}`,
+        `Role ${i}`,
+        `${LEGAL_PARAGRAPH}\n\n${uniqueSentence(CITIES[i]!)}`,
+        "acme",
+      ),
+  );
+}
+
+Deno.test("a paragraph pasted into most of a board's own postings is not a vocabulary gap", () => {
+  const postings = boardOf(
+    12,
+    (city) => `We need someone who knows kubernetes and terraform, based in ${city}.`,
+  );
+  const report = findVocabularyGaps(postings, "", "", { minPostings: 3 });
+  const terms = report.gaps.map((g) => g.term);
+  assertEquals(terms.includes("discriminate"), false, "legal boilerplate, not a skill");
+  assertEquals(terms.includes("veteran status"), false);
+  // Subsumed into "knows kubernetes" — same postings, so the phrase alone
+  // is kept (§ "a phrase subsumes its parts"). Either way it survived.
+  assert(
+    terms.some((t) => t.includes("kubernetes")),
+    "the genuinely recurring skill term survives",
+  );
+  assert(report.boilerplateSegmentsRemoved > 0, "the report says the segment was excluded");
+});
+
+Deno.test("boilerplate is compared within a board, not across the whole corpus", () => {
+  const acme = boardOf(12, (city) => `Acme wants a rust engineer in ${city}.`);
+  const globex = Array.from(
+    { length: 12 },
+    (_, i) =>
+      boardPosting(
+        `g${i}`,
+        `Role ${i}`,
+        "Globex requires all applicants to complete a background check before an offer is made.\n\n" +
+          `Globex wants a python engineer in ${CITIES[i]}.`,
+        "globex",
+      ),
+  );
+  const report = findVocabularyGaps([...acme, ...globex], "", "", { minPostings: 3 });
+  const terms = report.gaps.map((g) => g.term);
+  assertEquals(terms.includes("discriminate"), false, "acme's own boilerplate is still stripped");
+  assertEquals(
+    terms.includes("background check"),
+    false,
+    "globex's own boilerplate is stripped too",
+  );
+  // Subsumed into "rust engineer" / "python engineer" — same postings each.
+  assert(terms.some((t) => t.includes("rust")));
+  assert(terms.some((t) => t.includes("python")));
+});
+
+Deno.test("a board too small to judge is left alone", () => {
+  // Below the minimum group size — "identical in all three" is not evidence
+  // of a template, so nothing is stripped and the boilerplate itself is
+  // reported like any other recurring term (still correct, just unfiltered).
+  const postings = boardOf(3, (city) => `Needs kubernetes experience in ${city}.`);
+  const report = findVocabularyGaps(postings, "", "", { minPostings: 3 });
+  const terms = report.gaps.map((g) => g.term);
+  assert(terms.includes("discriminate"), "too few postings to call this a template");
+  assertEquals(report.boilerplateSegmentsRemoved, 0);
+});
+
+Deno.test("documents with no groupId are never stripped", () => {
+  const documents: TermDocument[] = Array.from(
+    { length: 12 },
+    (_, i) =>
+      posting(`p${i}`, `Role ${i}`, `${LEGAL_PARAGRAPH}\n\nNeeds kubernetes in ${CITIES[i]}.`),
+  );
+  const { documents: stripped, removedSegments } = stripBoilerplate(documents);
+  assertEquals(stripped, documents);
+  assertEquals(removedSegments, 0);
+});
+
+Deno.test("a number spliced into an otherwise identical template does not defeat the match", () => {
+  const postings = Array.from(
+    { length: 12 },
+    (_, i) =>
+      boardPosting(
+        `p${i}`,
+        `Role ${i}`,
+        `Base pay for this role is $${90 + i},000 per year, determined case-by-case.\n\n` +
+          `We are hiring a mechanical engineer in ${CITIES[i]}.`,
+        "acme",
+      ),
+  );
+  const { documents: stripped, removedSegments } = stripBoilerplate(postings);
+  assert(removedSegments > 0, "the templated sentence should match despite the different number");
+  for (const doc of stripped) {
+    assertEquals(doc.text.includes("determined case-by-case"), false);
+    assert(doc.text.includes("mechanical engineer"), "the per-posting sentence is untouched");
+  }
+});
+
+Deno.test("a segment written independently by different postings is not boilerplate", () => {
+  // Two postings coincidentally sharing one short sentence, well under the
+  // 50% ratio for a 12-posting board — not a template, left alone.
+  const postings = boardOf(
+    12,
+    (city) =>
+      city === "Chicago" || city === "Boston"
+        ? "We use rust for the backend."
+        : `A role in ${city}.`,
+  );
+  const { removedSegments } = stripBoilerplate(postings);
+  // Only the always-present LEGAL_PARAGRAPH clears the ratio; the
+  // coincidentally-shared "rust" sentence (2 of 12) does not.
+  const legalOnly = stripBoilerplate(boardOf(12, (city) => `A role in ${city}.`));
+  assertEquals(removedSegments, legalOnly.removedSegments);
 });
 
 /* ------------------------------------------------ writing prompts (M12) --- */
