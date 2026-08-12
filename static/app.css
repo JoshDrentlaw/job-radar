@@ -246,6 +246,15 @@ main {
   gap: var(--space-l);
 }
 
+.build-footer {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: 0 var(--space-m) var(--space-l);
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+  text-align: end;
+}
+
 .page-head {
   display: flex;
   flex-wrap: wrap;

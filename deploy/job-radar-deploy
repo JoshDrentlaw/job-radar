@@ -187,6 +187,14 @@ find "$BACKUP_DIR" -name 'pre-deploy-*.dump' -mtime +14 -delete
 git_as merge --ff-only "origin/$BRANCH" ||
   die "cannot fast-forward $REPO — it has local commits or changes"
 
+# Record the commit for the app itself to read. Its --allow-read list stops at
+# ./migrations and ./static — no .git, no --allow-run to shell out to git — so
+# this file is the only way a running page can say what is actually live,
+# rather than a human guessing from wall-clock time (§10, deploy docs).
+# Written as jobradar, like the rest of the checkout, and not through the merge
+# above: it is not tracked, so nothing about --ff-only cares about its content.
+printf '%s\n' "$target" | sudo -u "$RUN_AS" tee "$REPO/COMMIT" >/dev/null
+
 # Deploy this script too.
 #
 # It used to be copied to /usr/local/bin by hand, which meant every fix to it

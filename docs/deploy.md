@@ -484,6 +484,13 @@ It does three things a bare `git pull && systemctl restart` does not:
   applies migrations and migrations do not come back.
 - **Checks the app answers afterwards** and logs loudly if it does not.
 
+It also writes the commit it just fast-forwarded to into `$REPO/COMMIT`, which every page's footer
+reads at startup and shows in short form. The timer's five-minute interval is not wall-clock aligned
+(`OnUnitActiveSec`, plus a 30s jitter) and a tick can hold rather than deploy — waiting on a pending
+check, say — so watching the clock never tells you whether a change is actually live. The footer
+does: compare its short SHA to the commit you expect, or diff it against `git rev-parse HEAD`
+locally. `journalctl -u job-radar-deploy` remains the full story, including _why_ a tick held.
+
 Three details of the check gate that only matter once they bite:
 
 - **`skipped` and `neutral` count as passing.** Only `failure`, `cancelled` and `timed_out` hold a

@@ -6,6 +6,7 @@
  */
 
 import type { FC, PropsWithChildren } from "hono/jsx";
+import { DEPLOYED_COMMIT } from "@platform/build-info.ts";
 
 export interface LayoutProps {
   readonly title: string;
@@ -30,6 +31,14 @@ const NAV = [
   { key: "applications", href: "/applications", label: "Applications" },
   { key: "settings", href: "/account", label: "Settings" },
 ] as const;
+
+/** Absent in development, where nothing writes the COMMIT file the deploy leaves behind. */
+const BuildFooter: FC = () =>
+  DEPLOYED_COMMIT === undefined ? null : (
+    <footer class="build-footer">
+      build <code>{DEPLOYED_COMMIT}</code>
+    </footer>
+  );
 
 export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => (
   <html lang="en">
@@ -67,6 +76,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = (props) => (
         </div>
       </header>
       <main>{props.children}</main>
+      <BuildFooter />
     </body>
   </html>
 );
@@ -83,6 +93,7 @@ export const BareLayout: FC<PropsWithChildren<{ title: string }>> = (props) => (
     </head>
     <body>
       <div class="login-shell">{props.children}</div>
+      <BuildFooter />
     </body>
   </html>
 );
