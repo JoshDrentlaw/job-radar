@@ -197,3 +197,28 @@ Deno.test("the server tasks grant the whole ANTHROPIC_ prefix, not named vars", 
     );
   }
 });
+
+/**
+ * build-info.ts reads ./COMMIT to show what commit is actually running
+ * (layout.tsx's footer). Without this entry the read throws NotCapable at
+ * startup in dev — silently, since the module swallows the error — and the
+ * footer would just never appear, which is exactly the kind of thing that
+ * goes unnoticed until someone asks "is my change live yet".
+ */
+Deno.test("the server tasks can read the COMMIT file the deploy script writes", async () => {
+  const manifest = await Deno.readTextFile("deno.json");
+  const taskCommand = (name: string): string => {
+    const found = new RegExp(`"${name}":\\s*"((?:[^"\\\\]|\\\\.)*)"`).exec(manifest);
+    if (found === null) throw new Error(`no task named ${name} in deno.json`);
+    return found[1]!;
+  };
+
+  for (const task of ["dev", "start"]) {
+    const allowRead = /--allow-read=(\S+)/.exec(taskCommand(task))?.[1] ?? "";
+    assertEquals(
+      allowRead.split(",").includes("./COMMIT"),
+      true,
+      `${task} must grant ./COMMIT — build-info.ts reads it at startup`,
+    );
+  }
+});

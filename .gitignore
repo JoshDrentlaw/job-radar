@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# Written by the deploy script after each fast-forward, so the app can show
+# what commit is actually running. Not tracked — it is per-deploy, not per-repo.
+/COMMIT
+
 # Deno
 deno.lock.bak
 /coverage/
