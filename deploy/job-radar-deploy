@@ -125,6 +125,22 @@ say "  available: ${target:0:8}"
 
 if [ "$current" = "$target" ]; then
   say "up to date — nothing to deploy"
+  # COMMIT is normally written below, as part of an actual fast-forward. But
+  # the deploy that *introduced* that write ran under the copy of this script
+  # from before the write existed — self-install replaces the file on disk,
+  # not the instructions already parsed into this run — so it fast-forwarded
+  # the checkout and self-installed the new script without ever writing the
+  # file itself. After that, current always equals target here, so the write
+  # below never ran again either: nothing short of another commit on main
+  # would have produced it. Treat a missing or stale COMMIT as worth fixing
+  # on any idle tick, not just a deploying one, so a gap like that — or a
+  # file lost some other way, e.g. hand-deleted — heals on its own instead of
+  # waiting on the next release.
+  existing=$(sudo -u "$RUN_AS" cat "$REPO/COMMIT" 2>/dev/null || true)
+  if [ "$existing" != "$current" ]; then
+    printf '%s\n' "$current" | sudo -u "$RUN_AS" tee "$REPO/COMMIT" >/dev/null
+    log "backfilled COMMIT with ${current:0:8} (was ${existing:-missing})"
+  fi
   exit 0 # Silent without -v, because this runs every few minutes.
 fi
 

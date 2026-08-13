@@ -491,6 +491,12 @@ check, say — so watching the clock never tells you whether a change is actuall
 does: compare its short SHA to the commit you expect, or diff it against `git rev-parse HEAD`
 locally. `journalctl -u job-radar-deploy` remains the full story, including _why_ a tick held.
 
+An idle tick — nothing to deploy — backfills `COMMIT` too, if it is missing or stale. Without that,
+the file would only ever get written by a fast-forward, and the deploy that taught this script to
+write it was itself a fast-forward running under the copy of the script *from before that line
+existed* — so it shipped the capability without ever using it, and nothing short of another commit
+on `main` would have produced the file afterwards.
+
 Three details of the check gate that only matter once they bite:
 
 - **`skipped` and `neutral` count as passing.** Only `failure`, `cancelled` and `timed_out` hold a
