@@ -14,7 +14,9 @@ Figuring out what to write is the hard part, so the page opens with up to two pr
 data it already has — no new writing required to get one:
 
 - **A fact no facet reflects yet** — something already in your [Dossier](dossier.md) that shares no
-  word with your profile. Quoted back to you directly, since it's a real sentence you wrote.
+  word with your profile, other than words that show up in most of your facets already (your own
+  habits of phrase — "built", "team" — don't count as covering a fact just because they're common).
+  Quoted back to you directly, since it's a real sentence you wrote.
 - **A term postings keep using that appears nowhere** — the same "not written anywhere" situation
   the [Gaps](#gaps) tab reports, surfaced as a question instead of a table row: have you actually
   done that, or just never called it this?

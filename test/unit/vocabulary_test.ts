@@ -54,6 +54,46 @@ Deno.test("tokenize drops hash-like ids but keeps real hex-lookalike words and s
   assert(tokens.includes("c++"));
 });
 
+Deno.test("tokenize keeps a contraction whole instead of shattering it", () => {
+  const tokens = tokenize("You'll love it here — we're a fast-paced, don't-miss opportunity.");
+  assert(tokens.includes("you'll"), tokens.join(","));
+  assert(tokens.includes("we're"), tokens.join(","));
+  assert(!tokens.includes("ll"), "the fragment left by splitting on the apostrophe");
+  assert(!tokens.includes("re"), "the fragment left by splitting on the apostrophe");
+});
+
+Deno.test("a curly apostrophe is folded to a straight one before tokenizing", () => {
+  const tokens = tokenize("We’re looking for someone who isn’t afraid of ambiguity.");
+  assert(tokens.includes("we're"), tokens.join(","));
+  assert(tokens.includes("isn't"), tokens.join(","));
+});
+
+Deno.test("a contraction of two stopwords is not a vocabulary gap", () => {
+  const postings = [
+    posting("1", "Electrician", "You'll love it here. We've got you. It isn't slow."),
+    posting("2", "Propulsion Engineer", "You'll love it here. We've got you. It isn't slow."),
+    posting("3", "Mechanical Engineer", "You'll love it here. We've got you. It isn't slow."),
+  ];
+  const terms = findVocabularyGaps(postings, "", "", { minPostings: 3 }).gaps.map((g) => g.term);
+  // Before contractions were kept whole, splitting on the apostrophe left
+  // exactly these fragments behind — none of which is a word.
+  for (const garbage of ["ll", "ve", "isn", "you'll", "we've", "isn't"]) {
+    assertEquals(terms.includes(garbage), false, `"${garbage}" is not something to write about`);
+  }
+});
+
+Deno.test("job-posting personality filler is not a vocabulary gap", () => {
+  const postings = [
+    posting("1", "Electrician", "Looking for a fast-paced, detail-oriented self-starter."),
+    posting("2", "Propulsion Engineer", "Looking for a fast-paced, detail-oriented self-starter."),
+    posting("3", "Mechanical Engineer", "Looking for a fast-paced, detail-oriented self-starter."),
+  ];
+  const terms = findVocabularyGaps(postings, "", "", { minPostings: 3 }).gaps.map((g) => g.term);
+  for (const filler of ["fast-paced", "detail-oriented", "self-starter"]) {
+    assertEquals(terms.includes(filler), false, `"${filler}" is filler, not a skill`);
+  }
+});
+
 Deno.test("a hash that leaked into many postings is not a vocabulary gap", () => {
   const postings = [
     posting("1", "Electrician", "Requisition id 24d528fddbfc930044f9ff621f961987 apply now."),
@@ -377,24 +417,59 @@ Deno.test("a segment written independently by different postings is not boilerpl
 
 Deno.test("a document sharing zero terms with the profile is uncovered", () => {
   const facts = [fact("f1", "Built the data ingest pipeline at Acme.")];
-  const uncovered = findUncoveredDocuments(facts, "Ran a Kubernetes fleet in production.");
+  const uncovered = findUncoveredDocuments(facts, ["Ran a Kubernetes fleet in production."]);
   assertEquals(uncovered, [{ id: "f1", label: "Built the data ingest pipeline at Acme." }]);
 });
 
 Deno.test("even one shared word counts as coverage — blunt, not fuzzy", () => {
   const facts = [fact("f1", "Built the data ingest pipeline at Acme.")];
   // Shares only "built" with the profile, on an unrelated topic — still covered.
-  assertEquals(findUncoveredDocuments(facts, "Built a mobile app in Swift."), []);
+  assertEquals(findUncoveredDocuments(facts, ["Built a mobile app in Swift."]), []);
 });
 
 Deno.test("an empty profile leaves every non-empty fact uncovered", () => {
   const facts = [fact("f1", "Ran a Postgres fleet."), fact("f2", "Wrote a CLI tool.")];
-  assertEquals(findUncoveredDocuments(facts, "").length, 2);
+  assertEquals(findUncoveredDocuments(facts, [""]).length, 2);
 });
 
 Deno.test("a fact with no content words (after stopwords) is not a candidate either way", () => {
   const facts = [fact("f1", "and the of")]; // pure stopwords, tokenizes to nothing
-  assertEquals(findUncoveredDocuments(facts, ""), []);
+  assertEquals(findUncoveredDocuments(facts, [""]), []);
+});
+
+Deno.test("a word common across most of the profile's own facets is not coverage", () => {
+  const facts = [fact("f1", "Migrated the billing database to Postgres.")];
+  // "built" and "using" recur in all three sections below — the profile's
+  // own habits of phrase, not evidence that any of them addresses this fact.
+  const facetSections = [
+    "I built a lot of internal tools using modern practices.",
+    "I built dashboards for the team using React.",
+    "I built CI pipelines using GitHub Actions.",
+  ];
+  assertEquals(findUncoveredDocuments(facts, facetSections), [
+    { id: "f1", label: "Migrated the billing database to Postgres." },
+  ]);
+});
+
+Deno.test("a distinctive word shared with even one facet still counts as coverage", () => {
+  const facts = [fact("f1", "Migrated the billing database to Postgres.")];
+  const facetSections = [
+    "I run Postgres clusters in production.",
+    "I built dashboards for the team using React.",
+    "I built CI pipelines using GitHub Actions.",
+  ];
+  assertEquals(findUncoveredDocuments(facts, facetSections), []);
+});
+
+Deno.test("fewer than three sections is too few to call anything generic", () => {
+  // "built" recurs in both sections, but with only two there is no "most of
+  // them" to speak of — coincidence, not a habit — so it still counts.
+  const facts = [fact("f1", "Built a small migration script.")];
+  const facetSections = [
+    "I built a lot of internal tools.",
+    "I built dashboards for the team.",
+  ];
+  assertEquals(findUncoveredDocuments(facts, facetSections), []);
 });
 
 Deno.test("matching is case- and inflection-blind only where it honestly can be", () => {

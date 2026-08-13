@@ -468,7 +468,8 @@ async function pickWritingPrompts(
     services.facts.list(),
     services.matches.listCandidates({}),
   ]);
-  const profileText = activeFacets.map((f) => `${f.name}\n${f.content}`).join("\n");
+  const facetTexts = activeFacets.map((f) => `${f.name}\n${f.content}`);
+  const profileText = facetTexts.join("\n");
 
   const activeFacts = facts.filter((f) => f.active);
   const factDocuments: TermDocument[] = activeFacts.map((f) => ({
@@ -476,7 +477,7 @@ async function pickWritingPrompts(
     label: f.text,
     text: f.text,
   }));
-  const factPrompt = pickOne(findUncoveredDocuments(factDocuments, profileText));
+  const factPrompt = pickOne(findUncoveredDocuments(factDocuments, facetTexts));
 
   const matched = new Set<PostingId>(candidates.map((candidate) => candidate.postingId));
   const { postings } = await services.postings.list({ limit: 5_000 });

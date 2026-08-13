@@ -111,13 +111,35 @@ const STOPWORDS: ReadonlySet<string> = new Set(
     inclusive job join learn level like look looking love make many mission need needs new
     offer one opportunity organization people plus position preferred provide range required
     requirements responsible role salary senior skills someone strong team teams us use using
-    want work working world year years you'll your
+    want work working world year years your
     `.split(/\s+/).filter((word) => word !== ""),
   ).concat(
     // A markdown link's target splits on ":" into "https" and the rest of the
     // URL (§ htmlToMarkdown renders `<a>` as `[text](url)`). Almost every
     // posting links somewhere, so this is rendering noise, not vocabulary.
     ["https", "http", "www"],
+  ).concat(
+    // A contraction of two stopwords is still a stopword. `tokenize` keeps the
+    // apostrophe as part of the token (below) precisely so these are listed
+    // here rather than shattering into fragments like "don" + "t" or
+    // "you" + "ll" — neither of which is a word, and both of which used to
+    // slip through as "recurring terms" once they hit minPostings.
+    `
+    aren't can't couldn't didn't doesn't don't hadn't hasn't haven't isn't shouldn't wasn't
+    weren't won't wouldn't i'm i've i'd i'll you're you've you'd you'll we're we've we'd we'll
+    they're they've they'd they'll he's he'd he'll she's she'd she'll it's it'd it'll that's
+    there's what's who's let's
+    `.split(/\s+/).filter((word) => word !== ""),
+  ).concat(
+    // Job-posting personality filler. Each half is a real, contentful word on
+    // its own — "driven", "oriented" — but the tokenizer keeps internal
+    // hyphens to protect names like `ci/cd` and `node.js`, so these compounds
+    // survive whole and rank as if they were a skill.
+    `
+    fast-paced self-starter self-motivated highly-motivated detail-oriented detail-orientated
+    results-driven results-oriented data-driven team-oriented cross-functional customer-centric
+    customer-focused hands-on go-getter problem-solver
+    `.split(/\s+/).filter((word) => word !== ""),
   ),
 );
 
@@ -143,13 +165,21 @@ function looksLikeId(token: string): boolean {
  * Tokens keep the punctuation that is part of a name — `c++`, `c#`, `node.js`,
  * `.net`, `ci/cd` — and lose the punctuation that is grammar. Getting this
  * wrong is how a vocabulary report ends up recommending "c" and "js".
+ *
+ * A contraction's apostrophe is kept for the same reason: dropping it splits
+ * "don't" into "don" and "t", and "you'll" into "you" and "ll" — none of
+ * which is a word, and "ll"/"re"/"ve" are short enough to slip past every
+ * other filter here. Kept whole, the contraction is exactly as recognizable
+ * to STOPWORDS as "don't" is to a reader. Curly quotes are folded to a
+ * straight one first since prose (and pasted job postings) use both.
  */
 export function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}+#./-]+/gu, " ")
+    .replace(/[‘’]/g, "'")
+    .replace(/[^\p{L}\p{N}+#./'-]+/gu, " ")
     .split(/\s+/)
-    .map((token) => token.replace(/^[^\p{L}\p{N}.]+/u, "").replace(/[.,\-/]+$/u, ""))
+    .map((token) => token.replace(/^[^\p{L}\p{N}.]+/u, "").replace(/[.,'\-/]+$/u, ""))
     .filter((token) => token.length >= 2 && token.length <= 40)
     // A bare number is never a skill.
     .filter((token) => !/^[\d.]+$/.test(token))
@@ -168,28 +198,68 @@ export interface UncoveredDocument {
   readonly label: string;
 }
 
+/** Below this many sections, "recurs in most of them" is coincidence, not a habit. */
+const GENERIC_TERM_MIN_SECTIONS = 3;
+
+/** Recurs in at least this share of the profile's own sections — the profile's own boilerplate. */
+const GENERIC_TERM_RATIO = 0.5;
+
 /**
- * Documents sharing zero terms with `profileText` — the fact-set half of a
- * writing prompt (M12): "you wrote this, but nothing in your profile reflects
- * it yet."
+ * Terms that recur across at least `GENERIC_TERM_RATIO` of the profile's own
+ * sections (facets, in practice). A verb like "built" or "team" that shows up
+ * in nearly every facet is how *this writer* talks, not evidence that any one
+ * of them addresses a given fact — the same reasoning `stripBoilerplate`
+ * applies to a board's templated paragraphs, aimed at the profile side
+ * instead of the postings side.
+ */
+function genericProfileTerms(sections: readonly string[]): ReadonlySet<string> {
+  if (sections.length < GENERIC_TERM_MIN_SECTIONS) return new Set();
+  const counts = new Map<string, number>();
+  for (const section of sections) {
+    for (const term of termsIn(section)) counts.set(term, (counts.get(term) ?? 0) + 1);
+  }
+  const threshold = Math.ceil(sections.length * GENERIC_TERM_RATIO);
+  return new Set(
+    [...counts.entries()].filter(([, count]) => count >= threshold).map(([term]) => term),
+  );
+}
+
+/**
+ * Documents sharing zero terms with `profileSections` — the fact-set half of
+ * a writing prompt (M12): "you wrote this, but nothing in your profile
+ * reflects it yet."
  *
  * Deliberately blunt, not fuzzy: any single shared word — including an
- * unrelated one, like both texts happening to say "built" — counts as
+ * unrelated one, like both texts happening to say "kubernetes" — counts as
  * coverage and drops a document from the list. That is the same honest limit
  * the rest of this module accepts: counting is checkable, guessing at
- * relatedness is not. A shrunken candidate pool from a large profile is the
- * visible cost of that choice.
+ * relatedness is not.
+ *
+ * The one exception is a word that recurs across most of the profile's own
+ * sections (§ genericProfileTerms) — "built", "team", the writer's own
+ * habits of phrase. Those do not count as coverage, because they are not
+ * evidence that *this* fact was addressed; they are evidence the writer uses
+ * that word a lot. Without this, the candidate pool collapses fast: each new
+ * facet adds its whole vocabulary to what counts as "covered," so a handful
+ * of facets sharing ordinary verbs with the fact set can empty the pool long
+ * before the resume is actually covered. `profileSections` takes the facets
+ * separately, not pre-joined, so this can tell "shared with one facet" from
+ * "shared with all of them."
  */
 export function findUncoveredDocuments(
   documents: readonly TermDocument[],
-  profileText: string,
+  profileSections: readonly string[],
 ): UncoveredDocument[] {
-  const profileTerms = termsIn(profileText);
+  const generic = genericProfileTerms(profileSections);
+  const profileTerms = new Set<string>();
+  for (const section of profileSections) {
+    for (const term of termsIn(section)) profileTerms.add(term);
+  }
   const uncovered: UncoveredDocument[] = [];
   for (const doc of documents) {
     const terms = termsIn(doc.text);
     if (terms.size === 0) continue; // nothing to compare — not a prompt candidate
-    const covered = [...terms].some((term) => profileTerms.has(term));
+    const covered = [...terms].some((term) => profileTerms.has(term) && !generic.has(term));
     if (!covered) uncovered.push({ id: doc.id, label: doc.label });
   }
   return uncovered;
