@@ -224,25 +224,32 @@ function genericProfileTerms(sections: readonly string[]): ReadonlySet<string> {
   );
 }
 
+/** A term produced by `termsIn` is a phrase, not a bare word, if it has more than one part. */
+function isPhrase(term: string): boolean {
+  return term.includes(" ");
+}
+
 /**
- * Documents sharing zero terms with `profileSections` — the fact-set half of
+ * Documents sharing no phrase with `profileSections` — the fact-set half of
  * a writing prompt (M12): "you wrote this, but nothing in your profile
  * reflects it yet."
  *
- * Deliberately blunt, not fuzzy: any single shared word — including an
- * unrelated one, like both texts happening to say "kubernetes" — counts as
- * coverage and drops a document from the list. That is the same honest limit
- * the rest of this module accepts: counting is checkable, guessing at
- * relatedness is not.
+ * Coverage requires a shared *phrase* — one of `termsIn`'s adjacent pairs,
+ * not a bare single word. A lone shared noun ("payroll", "queue") is common
+ * enough between two independently-written, merely-related texts to prove
+ * nothing; a shared two-word phrase ("payroll compliance", "queue
+ * pipeline") is the same kind of checkable evidence the rest of this module
+ * insists on, just at a size that actually distinguishes "addresses this
+ * fact" from "shares its neighborhood." Single-word overlap used to be
+ * enough on its own, and with a handful of broad facets sharing ordinary
+ * domain vocabulary with many facts, that alone was enough to empty the
+ * candidate pool before the profile was actually covered (#28).
  *
- * The one exception is a word that recurs across most of the profile's own
- * sections (§ genericProfileTerms) — "built", "team", the writer's own
- * habits of phrase. Those do not count as coverage, because they are not
- * evidence that *this* fact was addressed; they are evidence the writer uses
- * that word a lot. Without this, the candidate pool collapses fast: each new
- * facet adds its whole vocabulary to what counts as "covered," so a handful
- * of facets sharing ordinary verbs with the fact set can empty the pool long
- * before the resume is actually covered. `profileSections` takes the facets
+ * The one exception, in the other direction, is a phrase that recurs across
+ * most of the profile's own sections (§ genericProfileTerms) — the writer's
+ * own habits of phrase repeated across facets. Those still do not count as
+ * coverage, because they are evidence the writer talks a certain way, not
+ * evidence a given fact was addressed. `profileSections` takes the facets
  * separately, not pre-joined, so this can tell "shared with one facet" from
  * "shared with all of them."
  */
@@ -259,7 +266,9 @@ export function findUncoveredDocuments(
   for (const doc of documents) {
     const terms = termsIn(doc.text);
     if (terms.size === 0) continue; // nothing to compare — not a prompt candidate
-    const covered = [...terms].some((term) => profileTerms.has(term) && !generic.has(term));
+    const covered = [...terms].some((term) =>
+      isPhrase(term) && profileTerms.has(term) && !generic.has(term)
+    );
     if (!covered) uncovered.push({ id: doc.id, label: doc.label });
   }
   return uncovered;

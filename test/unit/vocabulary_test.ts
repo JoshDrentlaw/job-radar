@@ -421,10 +421,19 @@ Deno.test("a document sharing zero terms with the profile is uncovered", () => {
   assertEquals(uncovered, [{ id: "f1", label: "Built the data ingest pipeline at Acme." }]);
 });
 
-Deno.test("even one shared word counts as coverage — blunt, not fuzzy", () => {
+Deno.test("a single shared word is not enough to count as coverage", () => {
   const facts = [fact("f1", "Built the data ingest pipeline at Acme.")];
-  // Shares only "built" with the profile, on an unrelated topic — still covered.
-  assertEquals(findUncoveredDocuments(facts, ["Built a mobile app in Swift."]), []);
+  // Shares the bare words "built" and "pipeline", but no shared phrase — still uncovered.
+  const uncovered = findUncoveredDocuments(facts, [
+    "Built a monitoring pipeline for a mobile app.",
+  ]);
+  assertEquals(uncovered, [{ id: "f1", label: "Built the data ingest pipeline at Acme." }]);
+});
+
+Deno.test("a shared phrase counts as coverage, on an unrelated topic — blunt, not fuzzy", () => {
+  const facts = [fact("f1", "Built the data ingest pipeline at Acme.")];
+  // Shares the phrase "data ingest" with an otherwise unrelated fact — still covered.
+  assertEquals(findUncoveredDocuments(facts, ["Built a data ingest tool for reporting."]), []);
 });
 
 Deno.test("an empty profile leaves every non-empty fact uncovered", () => {
@@ -451,10 +460,10 @@ Deno.test("a word common across most of the profile's own facets is not coverage
   ]);
 });
 
-Deno.test("a distinctive word shared with even one facet still counts as coverage", () => {
+Deno.test("a distinctive phrase shared with even one facet still counts as coverage", () => {
   const facts = [fact("f1", "Migrated the billing database to Postgres.")];
   const facetSections = [
-    "I run Postgres clusters in production.",
+    "I handle billing database migrations across the fleet.",
     "I built dashboards for the team using React.",
     "I built CI pipelines using GitHub Actions.",
   ];
@@ -462,14 +471,31 @@ Deno.test("a distinctive word shared with even one facet still counts as coverag
 });
 
 Deno.test("fewer than three sections is too few to call anything generic", () => {
-  // "built" recurs in both sections, but with only two there is no "most of
-  // them" to speak of — coincidence, not a habit — so it still counts.
+  // "small migration" recurs in both sections, but with only two there is no
+  // "most of them" to speak of — coincidence, not a habit — so it still counts.
   const facts = [fact("f1", "Built a small migration script.")];
   const facetSections = [
-    "I built a lot of internal tools.",
-    "I built dashboards for the team.",
+    "I built a lot of small migration tools.",
+    "I built dashboards using small migration scripts for the team.",
   ];
   assertEquals(findUncoveredDocuments(facts, facetSections), []);
+});
+
+Deno.test("a broad facet sharing only single words with an unrelated fact does not cover it (#28)", () => {
+  // Production case: a facet named "Payroll" and a fact about an unrelated
+  // reporting dashboard used to be "covered" by sharing bare, ordinary nouns
+  // like "system" alone — with no phrase in common, it no longer is.
+  const facts = [
+    fact(
+      "f1",
+      "Toyota ACV Reporting Dashboard — read-only reporting on closed deals across internal tables.",
+    ),
+  ];
+  const facetSections = [
+    "Payroll: encode California payroll law into the system logic that runs payroll.",
+  ];
+  const uncovered = findUncoveredDocuments(facts, facetSections);
+  assertEquals(uncovered.length, 1);
 });
 
 Deno.test("matching is case- and inflection-blind only where it honestly can be", () => {
